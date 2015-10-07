@@ -34,47 +34,6 @@
 #include "sql_time.h"                  // make_truncated_value_warning
 #include "sql_base.h"                  // dynamic_column_error_message
 
-static Item_result item_store_type(Item_result a, Item *item,
-                                   my_bool unsigned_flag)
-{
-  Item_result b= item->result_type();
-
-  if (a == STRING_RESULT || b == STRING_RESULT)
-    return STRING_RESULT;
-  else if (a == REAL_RESULT || b == REAL_RESULT)
-    return REAL_RESULT;
-  else if (a == DECIMAL_RESULT || b == DECIMAL_RESULT ||
-           unsigned_flag != item->unsigned_flag)
-    return DECIMAL_RESULT;
-  else
-    return INT_RESULT;
-}
-
-static void agg_result_type(Item_result *type, Item **items, uint nitems)
-{
-  Item **item, **item_end;
-  my_bool unsigned_flag= 0;
-
-  *type= STRING_RESULT;
-  /* Skip beginning NULL items */
-  for (item= items, item_end= item + nitems; item < item_end; item++)
-  {
-    if ((*item)->type() != Item::NULL_ITEM)
-    {
-      *type= (*item)->result_type();
-      unsigned_flag= (*item)->unsigned_flag;
-      item++;
-      break;
-    }
-  }
-  /* Combine result types. Note: NULL items don't affect the result */
-  for (; item < item_end; item++)
-  {
-    if ((*item)->type() != Item::NULL_ITEM)
-      *type= item_store_type(*type, *item, unsigned_flag);
-  }
-}
-
 
 /**
   find an temporal type (item) that others will be converted to
@@ -185,6 +144,22 @@ static int agg_cmp_type(Item_result *type, Item **items, uint nitems)
 
   @param[in] items  array of items to aggregate the type from
   @paran[in] nitems number of items in the array
+  @param[in] treat_bit_as_number - if BIT should be aggregated to a non-BIT
+             counterpart as a LONGLONG number or as a VARBINARY string.
+
+             Currently behaviour depends on the function:
+             - LEAST/GREATEST treat BIT as VARBINARY when
+               aggregating with a non-BIT counterpart.
+               Note, UNION also works this way.
+
+             - CASE, COALESCE, IF, IFNULL treat BIT as LONGLONG when
+               aggregating with a non-BIT counterpart;
+
+             This inconsistency may be changed in the future. See MDEV-8867.
+
+             Note, independently from "treat_bit_as_number":
+             - a single BIT argument gives BIT as a result
+             - two BIT couterparts give BIT as a result
 
   @details This function aggregates field types from the array of items.
     Found type is supposed to be used later as the result field type
@@ -198,14 +173,50 @@ static int agg_cmp_type(Item_result *type, Item **items, uint nitems)
   @return aggregated field type.
 */
 
-enum_field_types agg_field_type(Item **items, uint nitems)
+enum_field_types agg_field_type(Item **items, uint nitems,
+                                bool treat_bit_as_number)
 {
   uint i;
-  if (!nitems || items[0]->result_type() == ROW_RESULT )
-    return (enum_field_types)-1;
+  if (!nitems || items[0]->result_type() == ROW_RESULT)
+  {
+    DBUG_ASSERT(0);
+    return MYSQL_TYPE_NULL;
+  }
   enum_field_types res= items[0]->field_type();
+  uint unsigned_count= items[0]->unsigned_flag;
   for (i= 1 ; i < nitems ; i++)
-    res= Field::field_type_merge(res, items[i]->field_type());
+  {
+    enum_field_types cur= items[i]->field_type();
+    if (treat_bit_as_number &&
+        ((res == MYSQL_TYPE_BIT) ^ (cur == MYSQL_TYPE_BIT)))
+    {
+      if (res == MYSQL_TYPE_BIT)
+        res= MYSQL_TYPE_LONGLONG; // BIT + non-BIT
+      else
+        cur= MYSQL_TYPE_LONGLONG; // non-BIT + BIT
+    }
+    res= Field::field_type_merge(res, cur);
+    unsigned_count+= items[i]->unsigned_flag;
+  }
+  switch (res) {
+  case MYSQL_TYPE_TINY:
+  case MYSQL_TYPE_SHORT:
+  case MYSQL_TYPE_LONG:
+  case MYSQL_TYPE_LONGLONG:
+  case MYSQL_TYPE_INT24:
+  case MYSQL_TYPE_YEAR:
+  case MYSQL_TYPE_BIT:
+    if (unsigned_count != 0 && unsigned_count != nitems)
+    {
+      /*
+        If all arguments are of INT-alike type but have different
+        unsigned_flag, then convert to DECIMAL.
+      */
+      return MYSQL_TYPE_NEWDECIMAL;
+    }
+  default:
+    break;
+  }
   return res;
 }
 
@@ -583,64 +594,6 @@ int Arg_comparator::set_compare_func(Item_func_or_sum *item, Item_result type)
   }
   }
   return 0;
-}
-
-/**
-  Parse date provided in a string to a MYSQL_TIME.
-
-  @param[in]   thd        Thread handle
-  @param[in]   str        A string to convert
-  @param[in]   warn_type  Type of the timestamp for issuing the warning
-  @param[in]   warn_name  Field name for issuing the warning
-  @param[out]  l_time     The MYSQL_TIME objects is initialized.
-
-  Parses a date provided in the string str into a MYSQL_TIME object.
-  The date is used for comparison, that is fuzzy dates are allowed
-  independently of sql_mode.
-  If the string contains an incorrect date or doesn't correspond to a date at
-  all then a warning is issued. The warn_type and the warn_name arguments are
-  used as the name and the type of the field when issuing the warning. If any
-  input was discarded (trailing or non-timestamp-y characters), return value
-  will be TRUE.
-
-  @return Status flag
-  @retval FALSE Success.
-  @retval True Indicates failure.
-*/
-
-bool get_mysql_time_from_str(THD *thd, String *str, timestamp_type warn_type, 
-                             const char *warn_name, MYSQL_TIME *l_time)
-{
-  bool value;
-  MYSQL_TIME_STATUS status;
-  int flags= TIME_FUZZY_DATES | MODE_INVALID_DATES;
-  ErrConvString err(str);
-
-  DBUG_ASSERT(warn_type != MYSQL_TIMESTAMP_TIME);
-
-  if (!str_to_datetime(str->charset(), str->ptr(), str->length(),
-                       l_time, flags, &status))
-  {
-     DBUG_ASSERT(l_time->time_type == MYSQL_TIMESTAMP_DATETIME || 
-                 l_time->time_type == MYSQL_TIMESTAMP_DATE);
-    /*
-      Do not return yet, we may still want to throw a "trailing garbage"
-      warning.
-    */
-    value= FALSE;
-  }
-  else
-  {
-    DBUG_ASSERT(l_time->time_type != MYSQL_TIMESTAMP_TIME);
-    DBUG_ASSERT(status.warnings != 0); // Must be set by set_to_datetime()
-    value= TRUE;
-  }
-
-  if (status.warnings > 0)
-    make_truncated_value_warning(thd, Sql_condition::WARN_LEVEL_WARN,
-                                 &err, warn_type, warn_name);
-
-  return value;
 }
 
 
@@ -2261,13 +2214,13 @@ void
 Item_func_case_abbreviation2::fix_length_and_dec2(Item **args)
 {
   uint32 char_length;
-  agg_result_type(&cached_result_type, args, 2);
-  cached_field_type= agg_field_type(args, 2);
+  set_handler_by_field_type(agg_field_type(args, 2, true));
   maybe_null=args[0]->maybe_null || args[1]->maybe_null;
   decimals= MY_MAX(args[0]->decimals, args[1]->decimals);
   unsigned_flag= args[0]->unsigned_flag && args[1]->unsigned_flag;
 
-  if (cached_result_type == DECIMAL_RESULT || cached_result_type == INT_RESULT) 
+  if (Item_func_case_abbreviation2::result_type() == DECIMAL_RESULT ||
+      Item_func_case_abbreviation2::result_type() == INT_RESULT)
   {
     int len0= args[0]->max_char_length() - args[0]->decimals
       - (args[0]->unsigned_flag ? 0 : 1);
@@ -2280,9 +2233,10 @@ Item_func_case_abbreviation2::fix_length_and_dec2(Item **args)
   else
     char_length= MY_MAX(args[0]->max_char_length(), args[1]->max_char_length());
 
-  switch (cached_result_type) {
+  switch (Item_func_case_abbreviation2::result_type()) {
   case STRING_RESULT:
-    if (count_string_result_length(cached_field_type, args, 2))
+    if (count_string_result_length(Item_func_case_abbreviation2::field_type(),
+                                   args, 2))
       return;
     break;
   case DECIMAL_RESULT:
@@ -2459,8 +2413,7 @@ void Item_func_if::fix_after_pullout(st_select_lex *new_parent, Item **ref)
 void Item_func_if::cache_type_info(Item *source)
 {
   Type_std_attributes::set(source);
-  cached_field_type=  source->field_type();
-  cached_result_type= source->result_type();
+  set_handler_by_field_type(source->field_type());
   maybe_null=         source->maybe_null;
 }
 
@@ -2475,7 +2428,7 @@ Item_func_if::fix_length_and_dec()
     maybe_null= true;
     // If both arguments are NULL, make resulting type BINARY(0).
     if (args[2]->type() == NULL_ITEM)
-      cached_field_type= MYSQL_TYPE_STRING;
+      set_handler_by_field_type(MYSQL_TYPE_STRING);
     return;
   }
   if (args[2]->type() == NULL_ITEM)
@@ -2546,8 +2499,7 @@ Item_func_nullif::fix_length_and_dec()
   if (!args[2])					// Only false if EOM
     return;
 
-  cached_result_type= args[2]->result_type();
-  cached_field_type= args[2]->field_type();
+  set_handler_by_field_type(args[2]->field_type());
   collation.set(args[2]->collation);
   decimals= args[2]->decimals;
   unsigned_flag= args[2]->unsigned_flag;
@@ -2961,12 +2913,11 @@ void Item_func_case::fix_length_and_dec()
   if (else_expr_num != -1)
     agg[nagg++]= args[else_expr_num];
   
-  agg_result_type(&cached_result_type, agg, nagg);
-  cached_field_type= agg_field_type(agg, nagg);
+  set_handler_by_field_type(agg_field_type(agg, nagg, true));
 
-  if (cached_result_type == STRING_RESULT)
+  if (Item_func_case::result_type() == STRING_RESULT)
   {
-    if (count_string_result_length(cached_field_type, agg, nagg))
+    if (count_string_result_length(Item_func_case::field_type(), agg, nagg))
       return;
     /*
       Copy all THEN and ELSE items back to args[] array.
@@ -3295,11 +3246,11 @@ my_decimal *Item_func_coalesce::decimal_op(my_decimal *decimal_value)
 
 void Item_func_coalesce::fix_length_and_dec()
 {
-  cached_field_type= agg_field_type(args, arg_count);
-  agg_result_type(&cached_result_type, args, arg_count);
-  switch (cached_result_type) {
+  set_handler_by_field_type(agg_field_type(args, arg_count, true));
+  switch (Item_func_coalesce::result_type()) {
   case STRING_RESULT:
-    if (count_string_result_length(cached_field_type, args, arg_count))
+    if (count_string_result_length(Item_func_coalesce::field_type(),
+                                   args, arg_count))
       return;          
     break;
   case DECIMAL_RESULT:
@@ -6327,8 +6278,8 @@ longlong Item_equal::val_int()
   while ((item= it++))
   {
     Field *field= it.get_curr_field();
-    /* Skip fields of non-const tables. They haven't been read yet */
-    if (field->table->const_table)
+    /* Skip fields of tables that has not been read yet */
+    if (!field->table->status || (field->table->status & STATUS_NULL_ROW))
     {
       if (eval_item->cmp(item) || (null_value= item->null_value))
         return 0;

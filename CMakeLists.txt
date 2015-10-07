@@ -54,7 +54,7 @@ IF(NOT DEFINED MANUFACTURER)
 ENDIF()
 
 SET(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING
-   "Choose the type of build, options are: None(CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel")
+   "Choose the type of build, options are: None(CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel PgoInstrument PgoOptimize")
 
 IF(UNIX AND NOT APPLE)
   # Note, that generally one should not change settings depending
@@ -86,7 +86,7 @@ ELSE()
   MARK_AS_ADVANCED(MYSQL_PROJECT_NAME)
 ENDIF()
 PROJECT(${MYSQL_PROJECT_NAME})
-
+INCLUDE(pgo)
 SET(CPACK_PACKAGE_NAME "MariaDB")
 SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MariaDB: a very fast and robust SQL database server")
 SET(CPACK_PACKAGE_URL "http://mariadb.org")
@@ -112,7 +112,6 @@ FOREACH(_base
     BREAK()
   ENDIF()
 ENDFOREACH()
-
 
 # Following autotools tradition, add preprocessor definitions
 # specified in environment variable CPPFLAGS
@@ -248,6 +247,7 @@ FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
     ENDIF()
   ENDFOREACH()
 ENDFOREACH()
+
 
 # Add safemutex for debug configurations, except on Windows
 # (safemutex has never worked on Windows)
@@ -459,7 +459,11 @@ IF(UNIX)
   INSTALL_DOCUMENTATION(Docs/INSTALL-BINARY COMPONENT Readme)
   INSTALL_DOCUMENTATION(Docs/INSTALL-BINARY Docs/README-wsrep COMPONENT Readme)
 ENDIF()
-
+MESSAGE(STATUS "PGO_MODE = ${PGO_MODE}")
+IF(PGO_MODE STREQUAL "INSTRUMENT" OR PGO_MODE STREQUAL "OPTIMIZE")
+MESSAGE(STATUS ".. PGO_MODE = ${PGO_MODE}")
+SET_PGO_FLAGS(${PGO_MODE})
+ENDIF()
 INCLUDE(CPack)
 
 IF(NON_DISTRIBUTABLE_WARNING)

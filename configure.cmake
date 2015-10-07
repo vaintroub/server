@@ -1060,3 +1060,21 @@ SET(SPRINTF_RETURNS_INT 1)
 CHECK_INCLUDE_FILE(ucontext.h HAVE_UCONTEXT_H)
 CHECK_STRUCT_HAS_MEMBER("struct timespec" tv_sec "time.h" STRUCT_TIMESPEC_HAS_TV_SEC)
 CHECK_STRUCT_HAS_MEMBER("struct timespec" tv_nsec "time.h" STRUCT_TIMESPEC_HAS_TV_NSEC)
+
+IF(NOT WIN32)
+  CHECK_C_SOURCE_RUNS(
+  "
+  #define _GNU_SOURCE
+  #include <fcntl.h>
+  #include <linux/falloc.h>
+  int main()
+  {
+    /* Ignore the return value for now. Check if the flags exist.
+    The return value is checked  at runtime. */
+    fallocate(0, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, 0, 0);
+
+    return(0);
+  }"
+  HAVE_FALLOC_PUNCH_HOLE_AND_KEEP_SIZE
+  )
+ENDIF()

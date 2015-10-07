@@ -25,7 +25,6 @@
 # - instruct CPack to do autenticode signing if SIGNCODE is set
 
 INCLUDE(cmake_parse_arguments)
-
 FUNCTION (MYSQL_ADD_EXECUTABLE)
   # Pass-through arguments for ADD_EXECUTABLE
   MYSQL_PARSE_ARGUMENTS(ARG

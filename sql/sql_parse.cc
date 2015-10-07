@@ -3440,11 +3440,16 @@ mysql_execute_command(THD *thd)
       }
       else
       {
-        /* in STATEMENT format, we probably have to replicate also temporary
-           tables, like mysql replication does
+        /*
+          In STATEMENT format, we probably have to replicate also temporary
+          tables, like mysql replication does. Also check if the requested
+          engine is allowed/supported.
         */
-        if (WSREP(thd) && (!thd->is_current_stmt_binlog_format_row() ||
-            !create_info.tmp_table()))
+        if (WSREP(thd) &&
+            !check_engine(thd, create_table->db, create_table->table_name,
+                          &create_info) &&
+            (!thd->is_current_stmt_binlog_format_row() ||
+             !create_info.tmp_table()))
         {
 	  WSREP_TO_ISOLATION_BEGIN(create_table->db, create_table->table_name, NULL)
         }
@@ -6954,9 +6959,26 @@ mysql_new_select(LEX *lex, bool move_down)
   }
   else
   {
+    bool const outer_most= (lex->current_select->master_unit() == &lex->unit);
+    if (outer_most && lex->result)
+    {
+      my_error(ER_WRONG_USAGE, MYF(0), "UNION", "INTO");
+      DBUG_RETURN(TRUE);
+    }
+    if (lex->proc_list.elements!=0)
+    {
+      my_error(ER_WRONG_USAGE, MYF(0), "UNION",
+               "SELECT ... PROCEDURE ANALYSE()");
+      DBUG_RETURN(TRUE);
+    }
     if (lex->current_select->order_list.first && !lex->current_select->braces)
     {
       my_error(ER_WRONG_USAGE, MYF(0), "UNION", "ORDER BY");
+      DBUG_RETURN(1);
+    }
+    if (lex->current_select->explicit_limit && !lex->current_select->braces)
+    {
+      my_error(ER_WRONG_USAGE, MYF(0), "UNION", "LIMIT");
       DBUG_RETURN(1);
     }
     select_lex->include_neighbour(lex->current_select);

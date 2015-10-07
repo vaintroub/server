@@ -2560,27 +2560,8 @@ my_decimal *Item_field::val_decimal_result(my_decimal *decimal_value)
 bool Item_field::val_bool_result()
 {
   if ((null_value= result_field->is_null()))
-    return FALSE;
-  switch (result_field->result_type()) {
-  case INT_RESULT:
-    return result_field->val_int() != 0;
-  case DECIMAL_RESULT:
-  {
-    my_decimal decimal_value;
-    my_decimal *val= result_field->val_decimal(&decimal_value);
-    if (val)
-      return !my_decimal_is_zero(val);
-    return 0;
-  }
-  case REAL_RESULT:
-  case STRING_RESULT:
-    return result_field->val_real() != 0.0;
-  case ROW_RESULT:
-  case TIME_RESULT:
-    DBUG_ASSERT(0);
-    return 0;                                   // Shut up compiler
-  }
-  return 0;
+    return false;
+  return result_field->val_bool();
 }
 
 
@@ -2655,7 +2636,7 @@ void Item_field::fix_after_pullout(st_select_lex *new_parent, Item **ref)
 
 Item *Item_field::get_tmp_table_item(THD *thd)
 {
-  Item_field *new_item= new (thd->mem_root) Item_field(thd, this);
+  Item_field *new_item= new (thd->mem_root) Item_temptable_field(thd, this);
   if (new_item)
     new_item->field= new_item->result_field;
   return new_item;
@@ -6630,6 +6611,16 @@ void Item_field::print(String *str, enum_query_type query_type)
 }
 
 
+void Item_temptable_field::print(String *str, enum_query_type query_type)
+{
+  /*
+    Item_ident doesn't have references to the underlying Field/TABLE objects,
+    so it's ok to use the following:
+  */
+  Item_ident::print(str, query_type);
+}
+
+
 Item_ref::Item_ref(THD *thd, Name_resolution_context *context_arg,
                    Item **item, const char *table_name_arg,
                    const char *field_name_arg,
@@ -7204,25 +7195,8 @@ bool Item_ref::val_bool_result()
   if (result_field)
   {
     if ((null_value= result_field->is_null()))
-      return 0;
-    switch (result_field->result_type()) {
-    case INT_RESULT:
-      return result_field->val_int() != 0;
-    case DECIMAL_RESULT:
-    {
-      my_decimal decimal_value;
-      my_decimal *val= result_field->val_decimal(&decimal_value);
-      if (val)
-        return !my_decimal_is_zero(val);
-      return 0;
-    }
-    case REAL_RESULT:
-    case STRING_RESULT:
-      return result_field->val_real() != 0.0;
-    case ROW_RESULT:
-    case TIME_RESULT:
-      DBUG_ASSERT(0);
-    }
+      return false;
+    return result_field->val_bool();
   }
   return val_bool();
 }
@@ -7836,7 +7810,7 @@ int Item_cache_wrapper::save_in_field(Field *to, bool no_conversions)
 Item* Item_cache_wrapper::get_tmp_table_item(THD *thd)
 {
   if (!orig_item->with_sum_func && !orig_item->const_item())
-    return new (thd->mem_root) Item_field(thd, result_field);
+    return new (thd->mem_root) Item_temptable_field(thd, result_field);
   return copy_or_same(thd);
 }
 
@@ -8654,26 +8628,6 @@ int stored_field_cmp_to_item(THD *thd, Field *field, Item *item)
     if (item->null_value)
       return 0;
     String *field_result= field->val_str(&field_tmp);
-
-    enum_field_types field_type= field->type();
-
-    if (field_type == MYSQL_TYPE_DATE || field_type == MYSQL_TYPE_DATETIME ||
-        field_type == MYSQL_TYPE_TIMESTAMP)
-    {
-      enum_mysql_timestamp_type type= MYSQL_TIMESTAMP_ERROR;
-
-      if (field_type == MYSQL_TYPE_DATE)
-        type= MYSQL_TIMESTAMP_DATE;
-      else
-        type= MYSQL_TIMESTAMP_DATETIME;
-        
-      const char *field_name= field->field_name;
-      MYSQL_TIME field_time, item_time;
-      get_mysql_time_from_str(thd, field_result, type, field_name, &field_time);
-      get_mysql_time_from_str(thd, item_result, type, field_name,  &item_time);
-
-      return my_time_compare(&field_time, &item_time);
-    }
     return sortcmp(field_result, item_result, field->charset());
   }
   if (res_type == INT_RESULT)
@@ -9118,28 +9072,18 @@ bool Item_cache_str::cache_value()
 double Item_cache_str::val_real()
 {
   DBUG_ASSERT(fixed == 1);
-  int err_not_used;
-  char *end_not_used;
   if (!has_value())
     return 0.0;
-  if (value)
-    return my_strntod(value->charset(), (char*) value->ptr(),
-		      value->length(), &end_not_used, &err_not_used);
-  return (double) 0;
+  return value ? double_from_string_with_check(value) :  0.0;
 }
 
 
 longlong Item_cache_str::val_int()
 {
   DBUG_ASSERT(fixed == 1);
-  int err;
   if (!has_value())
     return 0;
-  if (value)
-    return my_strntoll(value->charset(), value->ptr(),
-		       value->length(), 10, (char**) 0, &err);
-  else
-    return (longlong)0;
+  return value ? longlong_from_string_with_check(value) : 0;
 }
 
 
@@ -9157,11 +9101,7 @@ my_decimal *Item_cache_str::val_decimal(my_decimal *decimal_val)
   DBUG_ASSERT(fixed == 1);
   if (!has_value())
     return NULL;
-  if (value)
-    string2my_decimal(E_DEC_FATAL_ERROR, value, decimal_val);
-  else
-    decimal_val= 0;
-  return decimal_val;
+  return value ? decimal_from_string_with_check(decimal_val, value) : 0;
 }
 
 

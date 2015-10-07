@@ -742,7 +742,7 @@ void Item_func::signal_divide_by_null()
 Item *Item_func::get_tmp_table_item(THD *thd)
 {
   if (!with_sum_func && !const_item())
-    return new (thd->mem_root) Item_field(thd, result_field);
+    return new (thd->mem_root) Item_temptable_field(thd, result_field);
   return copy_or_same(thd);
 }
 
@@ -800,28 +800,28 @@ void Item_num_op::fix_length_and_dec(void)
   {
     count_real_length();
     max_length= float_length(decimals);
-    cached_result_type= REAL_RESULT;
+    set_handler_by_result_type(REAL_RESULT);
   }
   else if (r0 == DECIMAL_RESULT || r1 == DECIMAL_RESULT ||
            r0 == TIME_RESULT || r1 == TIME_RESULT)
   {
-    cached_result_type= DECIMAL_RESULT;
+    set_handler_by_result_type(DECIMAL_RESULT);
     result_precision();
     fix_decimals();
     if ((r0 == TIME_RESULT || r1 == TIME_RESULT) && decimals == 0)
-      cached_result_type= INT_RESULT;
+      set_handler_by_result_type(INT_RESULT);
   }
   else
   {
     DBUG_ASSERT(r0 == INT_RESULT && r1 == INT_RESULT);
-    cached_result_type=INT_RESULT;
+    set_handler_by_result_type(INT_RESULT);
     result_precision();
     decimals= 0;
   }
   DBUG_PRINT("info", ("Type: %s",
-             (cached_result_type == REAL_RESULT ? "REAL_RESULT" :
-              cached_result_type == DECIMAL_RESULT ? "DECIMAL_RESULT" :
-              cached_result_type == INT_RESULT ? "INT_RESULT" :
+             (result_type() == REAL_RESULT ? "REAL_RESULT" :
+              result_type() == DECIMAL_RESULT ? "DECIMAL_RESULT" :
+              result_type() == INT_RESULT ? "INT_RESULT" :
               "--ILLEGAL!!!--")));
   DBUG_VOID_RETURN;
 }
@@ -837,20 +837,22 @@ void Item_func_num1::fix_length_and_dec()
 {
   DBUG_ENTER("Item_func_num1::fix_length_and_dec");
   DBUG_PRINT("info", ("name %s", func_name()));
-  switch (cached_result_type= args[0]->cast_to_int_type()) {
+  // Note, cast_to_int_type() can return TIME_RESULT
+  switch (args[0]->cast_to_int_type()) {
   case INT_RESULT:
+    set_handler_by_result_type(INT_RESULT);
     max_length= args[0]->max_length;
     unsigned_flag= args[0]->unsigned_flag;
     break;
   case STRING_RESULT:
   case REAL_RESULT:
-    cached_result_type= REAL_RESULT;
+    set_handler_by_result_type(REAL_RESULT);
     decimals= args[0]->decimals; // Preserve NOT_FIXED_DEC
     max_length= float_length(decimals);
     break;
   case TIME_RESULT:
-    cached_result_type= DECIMAL_RESULT;
   case DECIMAL_RESULT:
+    set_handler_by_result_type(DECIMAL_RESULT);
     decimals= args[0]->decimal_scale(); // Do not preserve NOT_FIXED_DEC
     max_length= args[0]->max_length;
     break;
@@ -858,18 +860,18 @@ void Item_func_num1::fix_length_and_dec()
     DBUG_ASSERT(0);
   }
   DBUG_PRINT("info", ("Type: %s",
-                      (cached_result_type == REAL_RESULT ? "REAL_RESULT" :
-                       cached_result_type == DECIMAL_RESULT ? "DECIMAL_RESULT" :
-                       cached_result_type == INT_RESULT ? "INT_RESULT" :
+                      (result_type() == REAL_RESULT ? "REAL_RESULT" :
+                       result_type() == DECIMAL_RESULT ? "DECIMAL_RESULT" :
+                       result_type() == INT_RESULT ? "INT_RESULT" :
                        "--ILLEGAL!!!--")));
   DBUG_VOID_RETURN;
 }
 
 
-String *Item_func_hybrid_result_type::val_str(String *str)
+String *Item_func_hybrid_field_type::val_str(String *str)
 {
   DBUG_ASSERT(fixed == 1);
-  switch (cached_result_type) {
+  switch (Item_func_hybrid_field_type::cmp_type()) {
   case DECIMAL_RESULT:
   {
     my_decimal decimal_value, *val;
@@ -896,24 +898,23 @@ String *Item_func_hybrid_result_type::val_str(String *str)
     str->set_real(nr, decimals, collation.collation);
     break;
   }
-  case STRING_RESULT:
-    if (is_temporal_type(field_type()))
-    {
-      MYSQL_TIME ltime;
-      if (date_op(&ltime,
-                  field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0) ||
-          str->alloc(MAX_DATE_STRING_REP_LENGTH))
-      {
-        null_value= 1;
-        return (String *) 0;
-      }
-      ltime.time_type= mysql_type_to_time_type(field_type());
-      str->length(my_TIME_to_str(&ltime, const_cast<char*>(str->ptr()), decimals));
-      str->set_charset(&my_charset_bin);
-      return str;
-    }
-    return str_op(&str_value);
   case TIME_RESULT:
+  {
+    MYSQL_TIME ltime;
+    if (date_op(&ltime,
+                field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0) ||
+        str->alloc(MAX_DATE_STRING_REP_LENGTH))
+    {
+      null_value= 1;
+      return (String *) 0;
+    }
+    ltime.time_type= mysql_type_to_time_type(field_type());
+    str->length(my_TIME_to_str(&ltime, const_cast<char*>(str->ptr()), decimals));
+    str->set_charset(&my_charset_bin);
+    return str;
+  }
+  case STRING_RESULT:
+    return str_op(&str_value);
   case ROW_RESULT:
     DBUG_ASSERT(0);
   }
@@ -921,10 +922,10 @@ String *Item_func_hybrid_result_type::val_str(String *str)
 }
 
 
-double Item_func_hybrid_result_type::val_real()
+double Item_func_hybrid_field_type::val_real()
 {
   DBUG_ASSERT(fixed == 1);
-  switch (cached_result_type) {
+  switch (Item_func_hybrid_field_type::cmp_type()) {
   case DECIMAL_RESULT:
   {
     my_decimal decimal_value, *val;
@@ -941,24 +942,23 @@ double Item_func_hybrid_result_type::val_real()
   }
   case REAL_RESULT:
     return real_op();
+  case TIME_RESULT:
+  {
+    MYSQL_TIME ltime;
+    if (date_op(&ltime,
+                field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0 ))
+    {
+      null_value= 1;
+      return 0;
+    }
+    ltime.time_type= mysql_type_to_time_type(field_type());
+    return TIME_to_double(&ltime);
+  }
   case STRING_RESULT:
   {
-    if (is_temporal_type(field_type()))
-    {
-      MYSQL_TIME ltime;
-      if (date_op(&ltime,
-                  field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0 ))
-      {
-        null_value= 1;
-        return 0;
-      }
-      ltime.time_type= mysql_type_to_time_type(field_type());
-      return TIME_to_double(&ltime);
-    }
     String *res= str_op(&str_value);
     return res ? double_from_string_with_check(res) : 0.0;
   }
-  case TIME_RESULT:
   case ROW_RESULT:
     DBUG_ASSERT(0);
   }
@@ -966,10 +966,10 @@ double Item_func_hybrid_result_type::val_real()
 }
 
 
-longlong Item_func_hybrid_result_type::val_int()
+longlong Item_func_hybrid_field_type::val_int()
 {
   DBUG_ASSERT(fixed == 1);
-  switch (cached_result_type) {
+  switch (Item_func_hybrid_field_type::cmp_type()) {
   case DECIMAL_RESULT:
   {
     my_decimal decimal_value, *val;
@@ -983,24 +983,23 @@ longlong Item_func_hybrid_result_type::val_int()
     return int_op();
   case REAL_RESULT:
     return (longlong) rint(real_op());
+  case TIME_RESULT:
+  {
+    MYSQL_TIME ltime;
+    if (date_op(&ltime,
+                field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0))
+    {
+      null_value= 1;
+      return 0;
+    }
+    ltime.time_type= mysql_type_to_time_type(field_type());
+    return TIME_to_ulonglong(&ltime);
+  }
   case STRING_RESULT:
   {
-    if (is_temporal_type(field_type()))
-    {
-      MYSQL_TIME ltime;
-      if (date_op(&ltime,
-                  field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0))
-      {
-        null_value= 1;
-        return 0;
-      }
-      ltime.time_type= mysql_type_to_time_type(field_type());
-      return TIME_to_ulonglong(&ltime);
-    }
     String *res= str_op(&str_value);
     return res ? longlong_from_string_with_check(res) : 0;
   }
-  case TIME_RESULT:
   case ROW_RESULT:
     DBUG_ASSERT(0);
   }
@@ -1008,11 +1007,11 @@ longlong Item_func_hybrid_result_type::val_int()
 }
 
 
-my_decimal *Item_func_hybrid_result_type::val_decimal(my_decimal *decimal_value)
+my_decimal *Item_func_hybrid_field_type::val_decimal(my_decimal *decimal_value)
 {
   my_decimal *val= decimal_value;
   DBUG_ASSERT(fixed == 1);
-  switch (cached_result_type) {
+  switch (Item_func_hybrid_field_type::cmp_type()) {
   case DECIMAL_RESULT:
     val= decimal_op(decimal_value);
     break;
@@ -1028,37 +1027,36 @@ my_decimal *Item_func_hybrid_result_type::val_decimal(my_decimal *decimal_value)
     double2my_decimal(E_DEC_FATAL_ERROR, result, decimal_value);
     break;
   }
+  case TIME_RESULT:
+  {
+    MYSQL_TIME ltime;
+    if (date_op(&ltime,
+                field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0))
+    {
+      my_decimal_set_zero(decimal_value);
+      null_value= 1;
+      return 0;
+    }
+    ltime.time_type= mysql_type_to_time_type(field_type());
+    return date2my_decimal(&ltime, decimal_value);
+  }
   case STRING_RESULT:
   {
-    if (is_temporal_type(field_type()))
-    {
-      MYSQL_TIME ltime;
-      if (date_op(&ltime,
-                  field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0))
-      {
-        my_decimal_set_zero(decimal_value);
-        null_value= 1;
-        return 0;
-      }
-      ltime.time_type= mysql_type_to_time_type(field_type());
-      return date2my_decimal(&ltime, decimal_value);
-    }
     String *res= str_op(&str_value);
     return res ? decimal_from_string_with_check(decimal_value, res) : 0;
   }  
   case ROW_RESULT:
-  case TIME_RESULT:
     DBUG_ASSERT(0);
   }
   return val;
 }
 
 
-bool Item_func_hybrid_result_type::get_date(MYSQL_TIME *ltime,
+bool Item_func_hybrid_field_type::get_date(MYSQL_TIME *ltime,
                                             ulonglong fuzzydate)
 {
   DBUG_ASSERT(fixed == 1);
-  switch (cached_result_type) {
+  switch (Item_func_hybrid_field_type::cmp_type()) {
   case DECIMAL_RESULT:
   {
     my_decimal value, *res;
@@ -1086,10 +1084,12 @@ bool Item_func_hybrid_result_type::get_date(MYSQL_TIME *ltime,
       goto err;
     break;
   }
+  case TIME_RESULT:
+    return date_op(ltime,
+                   fuzzydate |
+                   (field_type() == MYSQL_TYPE_TIME ? TIME_TIME_ONLY : 0));
   case STRING_RESULT:
   {
-    if (is_temporal_type(field_type()))
-      return date_op(ltime, fuzzydate);
     char buff[40];
     String tmp(buff,sizeof(buff), &my_charset_bin),*res;
     if (!(res= str_op(&tmp)) ||
@@ -1097,10 +1097,8 @@ bool Item_func_hybrid_result_type::get_date(MYSQL_TIME *ltime,
                                   ltime, fuzzydate))
       goto err;
     break;
-     break;
   }
   case ROW_RESULT:
-  case TIME_RESULT:
     DBUG_ASSERT(0);
   }
 
@@ -1810,7 +1808,7 @@ void Item_func_div::fix_length_and_dec()
   DBUG_ENTER("Item_func_div::fix_length_and_dec");
   prec_increment= current_thd->variables.div_precincrement;
   Item_num_op::fix_length_and_dec();
-  switch (cached_result_type) {
+  switch (Item_func_div::result_type()) {
   case REAL_RESULT:
   {
     decimals=MY_MAX(args[0]->decimals,args[1]->decimals)+prec_increment;
@@ -1826,7 +1824,7 @@ void Item_func_div::fix_length_and_dec()
     break;
   }
   case INT_RESULT:
-    cached_result_type= DECIMAL_RESULT;
+    set_handler_by_result_type(DECIMAL_RESULT);
     DBUG_PRINT("info", ("Type changed: DECIMAL_RESULT"));
     result_precision();
     break;
@@ -2073,7 +2071,7 @@ void Item_func_neg::fix_length_and_dec()
     Use val() to get value as arg_type doesn't mean that item is
     Item_int or Item_float due to existence of Item_param.
   */
-  if (cached_result_type == INT_RESULT && args[0]->const_item())
+  if (Item_func_neg::result_type() == INT_RESULT && args[0]->const_item())
   {
     longlong val= args[0]->val_int();
     if ((ulonglong) val >= (ulonglong) LONGLONG_MIN &&
@@ -2084,7 +2082,7 @@ void Item_func_neg::fix_length_and_dec()
         Ensure that result is converted to DECIMAL, as longlong can't hold
         the negated number
       */
-      cached_result_type= DECIMAL_RESULT;
+      set_handler_by_result_type(DECIMAL_RESULT);
       DBUG_PRINT("info", ("Type changed: DECIMAL_RESULT"));
     }
   }
@@ -2386,11 +2384,12 @@ void Item_func_int_val::fix_length_and_dec()
   set_if_smaller(max_length,tmp);
   decimals= 0;
 
-  switch (cached_result_type= args[0]->cast_to_int_type())
+  // Note, cast_to_int_type() can return TIME_RESULT
+  switch (args[0]->cast_to_int_type())
   {
   case STRING_RESULT:
   case REAL_RESULT:
-    cached_result_type= REAL_RESULT;
+    set_handler_by_result_type(REAL_RESULT);
     max_length= float_length(decimals);
     break;
   case INT_RESULT:
@@ -2403,21 +2402,21 @@ void Item_func_int_val::fix_length_and_dec()
     if ((args[0]->max_length - args[0]->decimals) >=
         (DECIMAL_LONGLONG_DIGITS - 2))
     {
-      cached_result_type= DECIMAL_RESULT;
+      set_handler_by_result_type(DECIMAL_RESULT);
     }
     else
     {
       unsigned_flag= args[0]->unsigned_flag;
-      cached_result_type= INT_RESULT;
+      set_handler_by_result_type(INT_RESULT);
     }
     break;
   case ROW_RESULT:
     DBUG_ASSERT(0);
   }
   DBUG_PRINT("info", ("Type: %s",
-                      (cached_result_type == REAL_RESULT ? "REAL_RESULT" :
-                       cached_result_type == DECIMAL_RESULT ? "DECIMAL_RESULT" :
-                       cached_result_type == INT_RESULT ? "INT_RESULT" :
+                      (result_type() == REAL_RESULT ? "REAL_RESULT" :
+                       result_type() == DECIMAL_RESULT ? "DECIMAL_RESULT" :
+                       result_type() == INT_RESULT ? "INT_RESULT" :
                        "--ILLEGAL!!!--")));
 
   DBUG_VOID_RETURN;
@@ -2532,10 +2531,10 @@ void Item_func_round::fix_length_and_dec()
     if (args[0]->result_type() == DECIMAL_RESULT)
     {
       max_length++;
-      cached_result_type= DECIMAL_RESULT;
+      set_handler_by_result_type(DECIMAL_RESULT);
     }
     else
-      cached_result_type= REAL_RESULT;
+      set_handler_by_result_type(REAL_RESULT);
     return;
   }
 
@@ -2553,14 +2552,14 @@ void Item_func_round::fix_length_and_dec()
   {
     decimals= MY_MIN(decimals_to_set, NOT_FIXED_DEC);
     max_length= float_length(decimals);
-    cached_result_type= REAL_RESULT;
+    set_handler_by_result_type(REAL_RESULT);
     return;
   }
   
   switch (args[0]->result_type()) {
   case REAL_RESULT:
   case STRING_RESULT:
-    cached_result_type= REAL_RESULT;
+    set_handler_by_result_type(REAL_RESULT);
     decimals= MY_MIN(decimals_to_set, NOT_FIXED_DEC);
     max_length= float_length(decimals);
     break;
@@ -2571,14 +2570,14 @@ void Item_func_round::fix_length_and_dec()
                                        !val1_unsigned);
       max_length= args[0]->max_length + length_can_increase;
       /* Here we can keep INT_RESULT */
-      cached_result_type= INT_RESULT;
+      set_handler_by_result_type(INT_RESULT);
       decimals= 0;
       break;
     }
     /* fall through */
   case DECIMAL_RESULT:
   {
-    cached_result_type= DECIMAL_RESULT;
+    set_handler_by_result_type(DECIMAL_RESULT);
     decimals_to_set= MY_MIN(DECIMAL_MAX_SCALE, decimals_to_set);
     int decimals_delta= args[0]->decimals - decimals_to_set;
     int precision= args[0]->decimal_precision();
@@ -2821,47 +2820,116 @@ double Item_func_units::val_real()
 
 void Item_func_min_max::fix_length_and_dec()
 {
+  uint unsigned_count= 0;
   int max_int_part=0;
   decimals=0;
   max_length=0;
   maybe_null=0;
   thd= current_thd;
-  cmp_type=args[0]->result_type();
+  Item_result tmp_cmp_type= args[0]->cmp_type();
+  uint string_type_count= 0;
+  uint temporal_type_count= 0;
+  enum_field_types temporal_field_type= MYSQL_TYPE_DATETIME;
 
   for (uint i=0 ; i < arg_count ; i++)
   {
     set_if_bigger(max_length, args[i]->max_length);
     set_if_bigger(decimals, args[i]->decimals);
     set_if_bigger(max_int_part, args[i]->decimal_int_part());
+    unsigned_count+= args[i]->unsigned_flag;
     if (args[i]->maybe_null)
       maybe_null= 1;
-    cmp_type= item_cmp_type(cmp_type,args[i]->result_type());
+    tmp_cmp_type= item_cmp_type(tmp_cmp_type, args[i]->cmp_type());
+    string_type_count+= args[i]->cmp_type() == STRING_RESULT;
+    if (args[i]->cmp_type() == TIME_RESULT)
+    {
+      if (!temporal_type_count)
+        temporal_field_type= args[i]->field_type();
+      else
+        temporal_field_type= Field::field_type_merge(temporal_field_type,
+                                                     args[i]->field_type());
+      temporal_type_count++;
+    }
   }
-  if (cmp_type == STRING_RESULT)
+  unsigned_flag= unsigned_count == arg_count; // if all args are unsigned
+
+  switch (tmp_cmp_type) {
+  case TIME_RESULT:
+    // At least one temporal argument was found.
+    collation.set_numeric();
+    set_handler_by_field_type(temporal_field_type);
+    if (is_temporal_type_with_time(temporal_field_type))
+      set_if_smaller(decimals, TIME_SECOND_PART_DIGITS);
+    else
+      decimals= 0;
+    break;
+
+  case STRING_RESULT:
+    /*
+      All arguments are of string-alike types:
+        CHAR, VARCHAR, TEXT, BINARY, VARBINARY, BLOB, SET, ENUM
+      No numeric and no temporal types were found.
+    */
     agg_arg_charsets_for_string_result_with_comparison(collation,
                                                        args, arg_count);
-  else if ((cmp_type == DECIMAL_RESULT) || (cmp_type == INT_RESULT))
-  {
+    set_handler_by_field_type(agg_field_type(args, arg_count, false));
+    break;
+
+  case INT_RESULT:
+    /*
+       All arguments have INT-alike types:
+       TINY, SHORT, LONG, LONGLONG, INT24, YEAR, BIT.
+    */
     collation.set_numeric();
     fix_char_length(my_decimal_precision_to_length_no_truncation(max_int_part +
                                                                  decimals,
                                                                  decimals,
                                                                  unsigned_flag));
-  }
-  else if (cmp_type == REAL_RESULT)
-    fix_char_length(float_length(decimals));
-
-  compare_as_dates= find_date_time_item(args, arg_count, 0);
-  if (compare_as_dates)
-  {
-    cached_field_type= compare_as_dates->field_type();
-    if (mysql_type_to_time_type(cached_field_type) == MYSQL_TIMESTAMP_DATE)
-      decimals= 0;
+    if (unsigned_count != 0 && unsigned_count != arg_count)
+    {
+      /*
+        If all args are of INT-alike type, but have different unsigned_flag,
+        then change type to DECIMAL.
+      */
+      set_handler_by_field_type(MYSQL_TYPE_NEWDECIMAL);
+    }
     else
-      set_if_smaller(decimals, TIME_SECOND_PART_DIGITS);
+    {
+      /*
+        There are only INT-alike arguments with equal unsigned_flag.
+        Aggregate types to get the best covering type.
+        Treat BIT as LONGLONG when aggregating to non-BIT types.
+        Possible final type: TINY, SHORT, LONG, LONGLONG, INT24, YEAR, BIT.
+      */
+      set_handler_by_field_type(agg_field_type(args, arg_count, true));
+    }
+    break;
+
+  case DECIMAL_RESULT:
+    // All arguments are of DECIMAL type
+    collation.set_numeric();
+    fix_char_length(my_decimal_precision_to_length_no_truncation(max_int_part +
+                                                                 decimals,
+                                                                 decimals,
+                                                                 unsigned_flag));
+    set_handler_by_field_type(MYSQL_TYPE_NEWDECIMAL);
+    break;
+
+  case ROW_RESULT:
+    DBUG_ASSERT(0);
+    // Pass through
+  case REAL_RESULT:
+    collation.set_numeric();
+    fix_char_length(float_length(decimals));
+    /*
+      Set type to DOUBLE, as Item_func::tmp_table_field() does not
+      distinguish between DOUBLE and FLOAT and always creates Field_double.
+      Perhaps we should eventually change this to use agg_field_type() here,
+      and fix Item_func::tmp_table_field() to create Field_float when possible.
+    */
+    set_handler_by_field_type(MYSQL_TYPE_DOUBLE);
+    break;
   }
-  else
-    cached_field_type= agg_field_type(args, arg_count);
 }
 
 
@@ -2891,12 +2959,12 @@ bool Item_func_min_max::get_date(MYSQL_TIME *ltime, ulonglong fuzzy_date)
     for example, SELECT MONTH(GREATEST("2011-11-21", "2010-10-09"))
 
   */
-  if (!compare_as_dates)
+  if (Item_func_min_max::cmp_type() != TIME_RESULT)
     return Item_func::get_date(ltime, fuzzy_date);
 
   for (uint i=0; i < arg_count ; i++)
   {
-    longlong res= args[i]->val_temporal_packed(compare_as_dates);
+    longlong res= args[i]->val_temporal_packed(Item_func_min_max::field_type());
 
     /* Check if we need to stop (because of error or KILL) and stop the loop */
     if (thd->is_error() || args[i]->null_value)
@@ -2909,12 +2977,12 @@ bool Item_func_min_max::get_date(MYSQL_TIME *ltime, ulonglong fuzzy_date)
   }
   unpack_time(min_max, ltime);
 
-  if (compare_as_dates->field_type() == MYSQL_TYPE_DATE)
+  if (Item_func_min_max::field_type() == MYSQL_TYPE_DATE)
   {
     ltime->time_type= MYSQL_TIMESTAMP_DATE;
     ltime->hour= ltime->minute= ltime->second= ltime->second_part= 0;
   }
-  else if (compare_as_dates->field_type() == MYSQL_TYPE_TIME)
+  else if (Item_func_min_max::field_type() == MYSQL_TYPE_TIME)
   {
     ltime->time_type= MYSQL_TIMESTAMP_TIME;
     ltime->hour+= (ltime->month * 32 + ltime->day) * 24;
@@ -2936,9 +3004,9 @@ bool Item_func_min_max::get_date(MYSQL_TIME *ltime, ulonglong fuzzy_date)
 String *Item_func_min_max::val_str(String *str)
 {
   DBUG_ASSERT(fixed == 1);
-  if (compare_as_dates)
+  if (Item_func_min_max::cmp_type() == TIME_RESULT)
     return val_string_from_date(str);
-  switch (cmp_type) {
+  switch (Item_func_min_max::result_type()) {
   case INT_RESULT:
     return val_string_from_int(str);
   case DECIMAL_RESULT:
@@ -2982,7 +3050,7 @@ double Item_func_min_max::val_real()
 {
   DBUG_ASSERT(fixed == 1);
   double value=0.0;
-  if (compare_as_dates)
+  if (Item_func_min_max::cmp_type() == TIME_RESULT)
   {
     MYSQL_TIME ltime;
     if (get_date(&ltime, 0))
@@ -3011,7 +3079,7 @@ longlong Item_func_min_max::val_int()
 {
   DBUG_ASSERT(fixed == 1);
   longlong value=0;
-  if (compare_as_dates)
+  if (Item_func_min_max::cmp_type() == TIME_RESULT)
   {
     MYSQL_TIME ltime;
     if (get_date(&ltime, 0))
@@ -3041,7 +3109,7 @@ my_decimal *Item_func_min_max::val_decimal(my_decimal *dec)
   DBUG_ASSERT(fixed == 1);
   my_decimal tmp_buf, *tmp, *UNINIT_VAR(res);
 
-  if (compare_as_dates)
+  if (Item_func_min_max::cmp_type() == TIME_RESULT)
   {
     MYSQL_TIME ltime;
     if (get_date(&ltime, 0))
