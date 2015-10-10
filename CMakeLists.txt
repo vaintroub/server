@@ -150,6 +150,7 @@ INCLUDE(pcre)
 INCLUDE(ctest)
 INCLUDE(plugin)
 INCLUDE(install_macros)
+INCLUDE(mysql_add_library)
 INCLUDE(mysql_add_executable)
 
 # Handle options
@@ -388,6 +389,7 @@ IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(mysql-test)
   ADD_SUBDIRECTORY(mysql-test/lib/My/SafeProcess)
   ADD_SUBDIRECTORY(sql-bench)
+
 ENDIF()
 
 IF(UNIX)
@@ -462,7 +464,6 @@ ENDIF()
 MESSAGE(STATUS "PGO_MODE = ${PGO_MODE}")
 IF(PGO_MODE STREQUAL "INSTRUMENT" OR PGO_MODE STREQUAL "OPTIMIZE")
 MESSAGE(STATUS ".. PGO_MODE = ${PGO_MODE}")
-SET_PGO_FLAGS(${PGO_MODE})
 ENDIF()
 INCLUDE(CPack)
 

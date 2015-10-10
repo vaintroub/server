@@ -25,6 +25,7 @@
 # - instruct CPack to do autenticode signing if SIGNCODE is set
 
 INCLUDE(cmake_parse_arguments)
+INCLUDE(pgo)
 FUNCTION (MYSQL_ADD_EXECUTABLE)
   # Pass-through arguments for ADD_EXECUTABLE
   MYSQL_PARSE_ARGUMENTS(ARG
@@ -52,4 +53,5 @@ FUNCTION (MYSQL_ADD_EXECUTABLE)
     ENDIF()
     MYSQL_INSTALL_TARGETS(${target} DESTINATION ${ARG_DESTINATION} ${COMP})
   ENDIF()
+  HANDLE_PGO(${target})
 ENDFUNCTION()
