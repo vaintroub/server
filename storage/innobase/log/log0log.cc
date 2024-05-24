@@ -187,13 +187,15 @@ void log_file_t::write(os_offset_t offset, span<const byte> buf) noexcept
 @retval MAP_FAILED  if the memory cannot be mapped */
 static void *log_mmap(os_file_t file, os_offset_t size)
 {
+  int prot= PROT_READ, flags= MAP_SHARED;
+
+  if (!srv_read_only_mode && srv_operation < SRV_OPERATION_BACKUP)
+    prot= PROT_READ | PROT_WRITE, flags= MAP_SHARED_VALIDATE | MAP_SYNC;
+
   void *ptr=
-    my_mmap(0, size_t(size),
-            (srv_read_only_mode || srv_operation == SRV_OPERATION_BACKUP)
-            ? PROT_READ : PROT_READ | PROT_WRITE,
-            MAP_SHARED_VALIDATE | MAP_SYNC, file, 0);
+    my_mmap(0, size_t(size), prot, flags, file, 0);
 #ifdef __linux__
-  if (ptr == MAP_FAILED)
+  if (ptr == MAP_FAILED && srv_operation < SRV_OPERATION_BACKUP)
   {
     struct stat st;
     if (!fstat(file, &st))
@@ -204,18 +206,14 @@ static void *log_mmap(os_file_t file, os_offset_t size)
       {
         MSAN_STAT_WORKAROUND(&st);
         if (st.st_dev == st_dev)
-          ptr= my_mmap(0, size_t(size),
-                       srv_read_only_mode ? PROT_READ : PROT_READ | PROT_WRITE,
-                       MAP_SHARED, file, 0);
+          ptr= my_mmap(0, size_t(size), prot, MAP_SHARED, file, 0);
       }
     }
   }
 #endif /* __linux__ */
   return ptr;
 }
-#endif
 
-#ifdef HAVE_PMEM
 bool log_t::attach(log_file_t file, os_offset_t size)
 #else
 void log_t::attach_low(log_file_t file, os_offset_t size)
