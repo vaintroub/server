@@ -3434,35 +3434,8 @@ static bool xtrabackup_copy_mmap_logfile()
       break;
     else if (retry_count == 100)
       break;
-    else
-    {
-      if (xtrabackup_throttle && io_ticket-- < 0)
-        mysql_cond_wait(&wait_throttle, &recv_sys.mutex);
-      const size_t ps_1{my_system_page_size - 1};
-      const lsn_t lsn{recv_sys.lsn}, end_lsn{metadata_to_lsn};
-      mysql_mutex_unlock(&recv_sys.mutex);
-      if (!retry_count++)
-        msg("Retrying read of log at LSN=" LSN_PF, lsn);
-      size_t start_offset= size_t(start - log_sys.buf) & ~ps_1;
-      size_t end_offset= (size_t(log_sys.file_size) + ps_1) & ~ps_1;
-
-      if (end_lsn)
-      {
-        const size_t offset=
-          (size_t(log_sys.calc_lsn_offset(end_lsn)) + ps_1) & ~ps_1;
-        if (start_offset > offset)
-        {
-          msync(log_sys.buf + start_offset, end_offset - start_offset,
-                MS_INVALIDATE);
-          start_offset= size_t(log_sys.START_OFFSET) & ~ps_1;
-        }
-        end_offset= offset;
-      }
-
-      msync(log_sys.buf + start_offset, end_offset - start_offset,
-            MS_INVALIDATE);
-      mysql_mutex_lock(&recv_sys.mutex);
-    }
+    else if (xtrabackup_throttle && io_ticket-- < 0)
+      mysql_cond_wait(&wait_throttle, &recv_sys.mutex);
   }
 
   if (verbose)
