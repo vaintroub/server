@@ -1,21 +1,20 @@
-
-source include/not_embedded.inc;
-if (!$AUTH_ED25519V2_SO) {
-  skip No auth_ed25519v2 plugin;
-}
 install soname 'auth_ed25519v2';
---error ER_CANNOT_USER
 create user test1@localhost identified via ed25519v2 using 'pwd';
+ERROR HY000: Operation CREATE USER failed for 'test1'@'localhost'
 create user test1@localhost identified via ed25519v2 using PASSWORD('pwd');
 show grants for test1@localhost;
+Grants for test1@localhost
+GRANT USAGE ON *.* TO `test1`@`localhost` IDENTIFIED VIA ed25519v2 USING 'P0:AAAAAAABBhpy60OPAVvBuFN4Xm4PANIcGCRsryi6LK4=:vrfQAZh/6M9dTYnp7jPl52jVKIEkPpgMr+vHkJsVqac='
 connect con1, localhost, test1, pwd,,,,,client_ed25519v2;
 select 'yay!';
+yay!
+yay!
 disconnect con1;
 connect con2, localhost, test1, pwd;
 disconnect con2;
---error ER_ACCESS_DENIED_ERROR
+connect(localhost,test1,wrong_pwd,test,16000,/home/nik/mariadb/bld/mysql-test/var/tmp/mysqld.1.sock);
 connect con3, localhost, test1, wrong_pwd;
-
+ERROR 28000: Access denied for user 'test1'@'localhost' (using password: NO)
 connection default;
 drop user test1@localhost;
 uninstall soname 'auth_ed25519v2';
