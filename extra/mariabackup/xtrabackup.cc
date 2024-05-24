@@ -3358,12 +3358,6 @@ skip:
 	return(FALSE);
 }
 
-static bool xtrabackup_copy_logfile_finished()
-{
-  mysql_mutex_assert_owner(&recv_sys.mutex);
-  return metadata_to_lsn && metadata_to_lsn <= recv_sys.lsn;
-}
-
 #ifdef HAVE_PMEM
 static int
 xtrabackup_copy_mmap_snippet(ds_file_t *ds, const byte *start, const byte *end)
@@ -3377,6 +3371,9 @@ xtrabackup_copy_mmap_snippet(ds_file_t *ds, const byte *start, const byte *end)
   return ds_write(ds, start, end - start);
 }
 
+/** Copy memory-mapped log until the end of the log is reached
+or the log_copying_stop signal is received
+@return whether the operation failed */
 static bool xtrabackup_copy_mmap_logfile()
 {
   mysql_mutex_assert_owner(&recv_sys.mutex);
@@ -3430,12 +3427,29 @@ static bool xtrabackup_copy_mmap_logfile()
 
       retry_count= 0;
     }
-    else if (xtrabackup_copy_logfile_finished())
-      break;
-    else if (retry_count == 100)
-      break;
-    else if (xtrabackup_throttle && io_ticket-- < 0)
-      mysql_cond_wait(&wait_throttle, &recv_sys.mutex);
+    else
+    {
+      if (metadata_to_lsn)
+      {
+        if (metadata_to_lsn <= recv_sys.lsn)
+          return true;
+      }
+      else if (xtrabackup_throttle && io_ticket-- < 0)
+        mysql_cond_wait(&wait_throttle, &recv_sys.mutex);
+
+      if (!retry_count++)
+        msg("Retrying read of log at LSN=" LSN_PF, recv_sys.lsn);
+      else if (retry_count == 100)
+        break;
+      else
+      {
+        timespec abstime;
+        set_timespec_nsec(abstime, 1000000ULL /* 1 ms */);
+        if (!mysql_cond_timedwait(&log_copying_stop, &recv_sys.mutex,
+                                  &abstime))
+          return true;
+      }
+    }
   }
 
   if (verbose)
@@ -3445,14 +3459,15 @@ static bool xtrabackup_copy_mmap_logfile()
 #endif
 
 /** Copy redo log until the current end of the log is reached
-@return	whether the operation completed */
+@return whether the operation failed */
 static bool xtrabackup_copy_logfile()
 {
   mysql_mutex_assert_owner(&recv_sys.mutex);
+  DBUG_EXECUTE_IF("log_checksum_mismatch", return false;);
+
   ut_a(dst_log_file);
   ut_ad(recv_sys.is_initialised());
 
-  DBUG_EXECUTE_IF("log_checksum_mismatch", return false;);
 #ifdef HAVE_PMEM
   if (log_sys.is_pmem())
     return xtrabackup_copy_mmap_logfile();
@@ -3585,7 +3600,8 @@ static void log_copying_thread()
 {
   my_thread_init();
   mysql_mutex_lock(&recv_sys.mutex);
-  while (!xtrabackup_copy_logfile() && !xtrabackup_copy_logfile_finished())
+  while (!xtrabackup_copy_logfile() &&
+         (!metadata_to_lsn || metadata_to_lsn > recv_sys.lsn))
   {
     timespec abstime;
     set_timespec_nsec(abstime, 1000000ULL * xtrabackup_log_copy_interval);
