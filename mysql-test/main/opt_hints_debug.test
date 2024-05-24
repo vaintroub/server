@@ -60,7 +60,7 @@ SELECT /*+ DEBUG_HINT1(@QB1 a) */   1 FROM t1 a;
 SELECT /*+ DEBUG_HINT1(a b) */   1 FROM t1 a, t1 b;
 
 SELECT /*+ DEBUG_HINT2(i1) */ 1 FROM t1;
-SELECT /*+ DEBUG_HINT2(i1 i2) */ 1 FROM t1;
+SELECT /*+ DEBUG_HINT2(i1, i2) */ 1 FROM t1;
 
 --echo #
 --echo # test explainable statements for hint support:

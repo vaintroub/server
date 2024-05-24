@@ -389,13 +389,14 @@ union YYSTYPE {
   /*
     Hint parser section (sql_hints.yy)
   */
+  opt_hints_enum hint_type;
   LEX_CSTRING hint_string;
   class PT_hint *hint;
   class PT_hint_list *hint_list;
   Hint_param_index_list *hint_param_index_list;
   Hint_param_table *hint_param_table;
   Hint_param_table_list *hint_param_table_list;
-  class PT_hint_list *optimizer_hints;
+  // OLEGS remove: class PT_hint_list *optimizer_hints;
 
   int  num;
   ulong ulong_num;
@@ -1526,6 +1527,8 @@ public:
     this select level.
   */
   table_map select_list_tables;
+
+  Opt_hints_qb *opt_hints_qb;
 
   /* Set to 1 if any field in field list has ROWNUM() */
   bool rownum_in_field_list;

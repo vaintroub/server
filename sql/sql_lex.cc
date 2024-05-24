@@ -1410,7 +1410,7 @@ bool Lex_input_stream::consume_optimizer_hints(YYSTYPE *yylval)
     {
       yylineno= hint_scanner.get_lineno();
       yySkipn((int)(hint_scanner.get_ptr() - get_ptr()));
-      yylval->optimizer_hints= hint_list; // NULL in case of syntax error
+      yylval->hint_list= hint_list; // NULL in case of syntax error
       m_digest= hint_scanner.get_digest(); // NULL is digest buf. is full.
       return false;
     }

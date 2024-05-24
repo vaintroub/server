@@ -119,7 +119,7 @@ Warnings:
 Warning	1064	Optimizer hint syntax error near 'b) */   1 FROM t1 a, t1 b' at line 1
 SELECT /*+ DEBUG_HINT2(i1) */ 1 FROM t1;
 1
-SELECT /*+ DEBUG_HINT2(i1 i2) */ 1 FROM t1;
+SELECT /*+ DEBUG_HINT2(i1, i2) */ 1 FROM t1;
 1
 #
 # test explainable statements for hint support:
