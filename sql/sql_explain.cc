@@ -2719,12 +2719,30 @@ void Explain_subq_materialization::print_explain_json(Json_writer *writer,
   if (is_analyze)
   {
     writer->add_member("r_strategy").add_str(tracker.get_exec_strategy());
+    if (tracker.has_loops_count())
+    {
+      writer->add_member("r_loops").add_ull(tracker.get_loops_count());
+    }
+    if (tracker.has_table_scan_loops())
+    {
+      writer->add_member("r_table_scan_loops").add_ull(
+            tracker.get_table_scan_loops_count());
+    }
+    if (tracker.has_index_lookup_loops())
+    {
+      writer->add_member("r_index_lookup_loops").add_ull(
+            tracker.get_index_lookup_loops_count());
+    }
+    if (tracker.has_partial_match_loops())
+    {
+      writer->add_member("r_partial_match_loops").add_ull(
+            tracker.get_partial_match_loops_count());
+    }
     if (tracker.has_partial_match_buffer_size())
     {
       writer->add_member("r_partial_match_buffer_size").add_size(
             tracker.get_partial_match_buffer_size());
     }
-
     if (tracker.get_partial_match_merge_keys_count() > 0)
     {
       writer->add_member("r_partial_merge_key_sizes").start_array();

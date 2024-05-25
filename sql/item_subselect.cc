@@ -193,6 +193,7 @@ void Item_in_subselect::cleanup()
     in_strategy&= ~SUBS_STRATEGY_CHOSEN;
   */
   first_execution= TRUE;
+  materialization_tracker= NULL;
   pushed_cond_guards= NULL;
   Item_subselect::cleanup();
   DBUG_VOID_RETURN;
@@ -1603,6 +1604,7 @@ Item_in_subselect::Item_in_subselect(THD *thd, Item * left_exp,
 				     st_select_lex *select_lex):
   Item_exists_subselect(thd), left_expr_cache(0), first_execution(TRUE),
   in_strategy(SUBS_NOT_TRANSFORMED),
+  materialization_tracker(NULL),
   pushed_cond_guards(NULL), do_not_convert_to_sj(FALSE), is_jtbm_merged(FALSE),
   is_jtbm_const_tab(FALSE), is_flattenable_semijoin(FALSE),
   is_registered_semijoin(FALSE),
@@ -4266,17 +4268,21 @@ int subselect_uniquesubquery_engine::exec()
   empty_result_set= TRUE;
   table->status= 0;
   Item_in_subselect *in_subs= item->get_IN_subquery();
+  Subq_materialization_tracker *tracker= in_subs->get_materialization_tracker();
   DBUG_ASSERT(in_subs);
 
   if (!tab->preread_init_done && tab->preread_init())
     DBUG_RETURN(1);
- 
+  if (tracker)
+    tracker->increment_loops_count();
   if (in_subs->left_expr_has_null())
   {
     /*
       The case when all values in left_expr are NULL is handled by
       Item_in_optimizer::val_int().
     */
+    if (tracker)
+      tracker->increment_table_scan_loops();
     if (in_subs->is_top_level_item())
       DBUG_RETURN(1); /* notify caller to call reset() and set NULL value. */
     else
@@ -4297,6 +4303,8 @@ int subselect_uniquesubquery_engine::exec()
     DBUG_RETURN(true);
   }
 
+  if (tracker)
+    tracker->increment_index_lookup_loops();
   error= table->file->ha_index_read_map(table->record[0],
                                         tab->ref.key_buff,
                                         make_prev_keypart_map(tab->
@@ -5024,7 +5032,7 @@ subselect_hash_sj_engine::choose_partial_match_strategy(
     if (pm_buff_size > thd->variables.rowid_merge_buff_size)
       strategy= PARTIAL_MATCH_SCAN;
     else
-      item->get_IN_subquery()->materialization_tracker->
+      item->get_IN_subquery()->get_materialization_tracker()->
           set_partial_match_buffer_size(pm_buff_size);
   }
 }
@@ -5800,7 +5808,8 @@ int subselect_hash_sj_engine::exec()
       }
     }
   }
-  item_in->materialization_tracker->set_exec_strategy(strategy);
+
+  item_in->get_materialization_tracker()->set_exec_strategy(strategy);
   if (pm_engine)
     lookup_engine= pm_engine;
   item_in->change_engine(lookup_engine);
@@ -6271,6 +6280,9 @@ int subselect_partial_match_engine::exec()
   DBUG_ASSERT(!(item_in->left_expr_has_null() &&
                 item_in->is_top_level_item()));
 
+  Subq_materialization_tracker *tracker= item_in->get_materialization_tracker();
+  tracker->increment_loops_count();
+
   if (!item_in->left_expr_has_null())
   {
     /* Try to find a matching row by index lookup. */
@@ -6284,6 +6296,7 @@ int subselect_partial_match_engine::exec()
     else
     {
       /* Search for a complete match. */
+      tracker->increment_index_lookup_loops();
       if ((lookup_res= lookup_engine->index_lookup()))
       {
         /* An error occurred during lookup(). */
@@ -6328,6 +6341,7 @@ int subselect_partial_match_engine::exec()
   if (tmp_table->file->inited)
     tmp_table->file->ha_index_end();
 
+  tracker->increment_partial_match_loops();
   if (partial_match())
   {
     /* The result of IN is UNKNOWN. */
@@ -6534,7 +6548,7 @@ subselect_rowid_merge_engine::init(MY_BITMAP *non_null_key_parts,
                  0, 0))
     return TRUE;
 
-  item->get_IN_subquery()->materialization_tracker->
+  item->get_IN_subquery()->get_materialization_tracker()->
       track_partial_merge_keys(merge_keys, merge_keys_count);
   return FALSE;
 }
@@ -6992,14 +7006,6 @@ void Item_subselect::init_expr_cache_tracker(THD *thd)
   DBUG_ASSERT(expr_cache->type() == Item::EXPR_CACHE_ITEM);
   node->cache_tracker= ((Item_cache_wrapper *)expr_cache)->init_tracker(qw->mem_root);
 }
-
-
-const char *Subq_materialization_tracker::exec_strategy_str
-  [subselect_hash_sj_engine::exec_strategy::END_OF_EXEC_STRATEGIES + 1]=
-{
-  "undefined", "index_lookup", "partial_match", "partial_match_merge",
-  "partial_match_scan", "impossible"
-};
 
 
 void Subq_materialization_tracker::track_partial_merge_keys(

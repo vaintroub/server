@@ -504,6 +504,8 @@ protected:
   bool was_null;
   /* A bitmap of possible execution strategies for an IN predicate. */
   uchar in_strategy;
+  /* Tracker collecting execution parameters of a materialized subquery */
+  Subq_materialization_tracker *materialization_tracker;
 protected:
   /* Used to trigger on/off conditions that were pushed down to subselect */
   bool *pushed_cond_guards;
@@ -528,6 +530,7 @@ protected:
     left_expr could later be changed to something on the execution arena.
   */
   Item *left_expr_orig;
+
 public:
   /* Priority of this predicate in the convert-to-semi-join-nest process. */
   int sj_convert_priority;
@@ -594,8 +597,6 @@ public:
   
   List<Field_pair> corresponding_fields;
 
-  Subq_materialization_tracker *materialization_tracker;
-
   /*
     Used to determine how this subselect item is represented in the item tree,
     in case there is a need to locate it there and replace with something else.
@@ -631,7 +632,7 @@ public:
   Item_in_subselect(THD *thd_arg, Item * left_expr, st_select_lex *select_lex);
   Item_in_subselect(THD *thd_arg):
     Item_exists_subselect(thd_arg), left_expr_cache(0), first_execution(TRUE),
-    in_strategy(SUBS_NOT_TRANSFORMED),
+    in_strategy(SUBS_NOT_TRANSFORMED), materialization_tracker(NULL),
     pushed_cond_guards(NULL), func(NULL), do_not_convert_to_sj(FALSE),
     is_jtbm_merged(FALSE), is_jtbm_const_tab(FALSE), upper_item(0),
     converted_from_in_predicate(FALSE) {}
@@ -784,6 +785,8 @@ public:
   inline Item* left_exp_orig() const
   { return left_expr_orig; }
   void init_subq_materialization_tracker(THD *thd);
+  Subq_materialization_tracker *get_materialization_tracker() const
+  { return materialization_tracker; }
 
   friend class Item_ref_null_helper;
   friend class Item_is_not_null_test;
@@ -1172,13 +1175,8 @@ public:
     PARTIAL_MATCH,  /* Use some partial matching strategy. */
     PARTIAL_MATCH_MERGE, /* Use partial matching through index merging. */
     PARTIAL_MATCH_SCAN,  /* Use partial matching through table scan. */
-    IMPOSSIBLE,      /* Subquery materialization is not applicable. */
-    END_OF_EXEC_STRATEGIES /* End marker */
+    IMPOSSIBLE      /* Subquery materialization is not applicable. */
   };
-  static_assert(END_OF_EXEC_STRATEGIES == 6,
-                "Modification of enum subselect_hash_sj_engine::exec_strategy "
-                "requires corresponding modification of "
-                "Explain_subq_materialization::exec_strategy_str[]");
 
 protected:
   /* The engine used to compute the IN predicate. */
@@ -1571,10 +1569,16 @@ public:
 class Subq_materialization_tracker
 {
 public:
+  using Strategy = subselect_hash_sj_engine::exec_strategy;
+
   Subq_materialization_tracker(MEM_ROOT *mem_root)
-    : exec_strategy(subselect_hash_sj_engine::exec_strategy::UNDEFINED),
-      partial_match_buffer_size(-1),
-      partial_match_merge_key_sizes(mem_root)
+    : exec_strategy(Strategy::UNDEFINED),
+      partial_match_buffer_size(0),
+      partial_match_merge_key_sizes(mem_root),
+      loops_count(0),
+      table_scan_loops_count(0),
+      index_lookup_loops_count(0),
+      partial_match_loops_count(0)
   {}
 
   void track_partial_merge_keys(Ordered_key **merge_keys,
@@ -1582,20 +1586,32 @@ public:
 
   const char *get_exec_strategy() const
   {
-    return exec_strategy_str[exec_strategy];
+    switch (exec_strategy)
+    {
+      case Strategy::UNDEFINED:
+        return "undefined";
+      case Strategy::COMPLETE_MATCH:
+        return "index_lookup";
+      case Strategy::PARTIAL_MATCH_MERGE:
+        return "partial_match_merge";
+      case Strategy::PARTIAL_MATCH_SCAN:
+        return "partial_match_scan";
+      default:
+        return "unsupported";
+    }
   }
 
-  void set_exec_strategy(subselect_hash_sj_engine::exec_strategy es)
+  void set_exec_strategy(Strategy es)
   {
     exec_strategy= es;
   }
 
   bool has_partial_match_buffer_size() const
   {
-    return partial_match_buffer_size != -1;
+    return partial_match_buffer_size != 0;
   }
 
-  longlong get_partial_match_buffer_size() const
+  ulonglong get_partial_match_buffer_size() const
   {
     return partial_match_buffer_size;
   }
@@ -1615,13 +1631,74 @@ public:
     return partial_match_merge_key_sizes[idx];
   }
 
-private:
-  subselect_hash_sj_engine::exec_strategy exec_strategy;
-  longlong partial_match_buffer_size;
-  Dynamic_array<ha_rows> partial_match_merge_key_sizes;
+  void increment_loops_count()
+  {
+    loops_count++;
+  }
 
-  static const char* exec_strategy_str
-    [subselect_hash_sj_engine::exec_strategy::END_OF_EXEC_STRATEGIES + 1];
+  bool has_loops_count()
+  {
+    return loops_count != 0;
+  }
+
+  ulonglong get_loops_count() const
+  {
+    return loops_count;
+  }
+
+  void increment_table_scan_loops()
+  {
+    table_scan_loops_count++;
+  }
+
+  bool has_table_scan_loops()
+  {
+    return table_scan_loops_count != 0;
+  }
+
+  ulonglong get_table_scan_loops_count() const
+  {
+    return table_scan_loops_count;
+  }
+
+  void increment_index_lookup_loops()
+  {
+    index_lookup_loops_count++;
+  }
+
+  bool has_index_lookup_loops()
+  {
+    return index_lookup_loops_count != 0;
+  }
+
+  ulonglong get_index_lookup_loops_count() const
+  {
+    return index_lookup_loops_count;
+  }
+
+  void increment_partial_match_loops()
+  {
+    partial_match_loops_count++;
+  }
+
+  bool has_partial_match_loops()
+  {
+    return partial_match_loops_count != 0;
+  }
+
+  ulonglong get_partial_match_loops_count() const
+  {
+    return partial_match_loops_count;
+  }
+
+private:
+  Strategy exec_strategy;
+  ulonglong partial_match_buffer_size;
+  Dynamic_array<ha_rows> partial_match_merge_key_sizes;
+  ulonglong loops_count;
+  ulonglong table_scan_loops_count;
+  ulonglong index_lookup_loops_count;
+  ulonglong partial_match_loops_count;
 };
 
 #endif /* ITEM_SUBSELECT_INCLUDED */
