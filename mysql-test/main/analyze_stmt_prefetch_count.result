@@ -1,0 +1,54 @@
+create table t1 (
+a varchar(255),
+b varchar(255),
+c varchar(255),
+d varchar(255),
+primary key(a,b,c,d)
+) engine=innodb;
+insert into t1 select
+#  repeat('abc-', 63), 
+repeat(uuid(), 7), 
+repeat(uuid(), 7), 
+repeat(uuid(), 7), 
+repeat(uuid(), 7)
+from seq_1_to_16384;
+insert into t1 values ('z','z','z','z');
+# restart
+set @innodb_pages_read0= 
+(select variable_value 
+from information_schema.session_status 
+where variable_name like 'innodb_pages_read');
+set @js='$analyze_output';
+set @js=json_extract(@js, '$.query_block.table.r_engine_stats');
+select @js;
+@js
+{"pages_accessed": 1174, "pages_read_count": 162, "pages_read_time_ms": 1.629, "pages_prefetch_read_count": 1088}
+set @pages_accessed= (select json_value(@js,'$.pages_accessed'));
+set @pages_read_count= (select json_value(@js,'$.pages_read_count'));
+set @pages_prefetch_read_count= (select json_value(@js,'$.pages_prefetch_read_count'));
+select @pages_accessed > 1000 and @pages_accessed < 1500;
+@pages_accessed > 1000 and @pages_accessed < 1500
+1
+set @total_read = (@pages_read_count + @pages_prefetch_read_count);
+select @pages_accessed*0.75 < @total_read, @total_read < @pages_accessed*1.25;
+@pages_accessed*0.75 < @total_read	@total_read < @pages_accessed*1.25
+1	1
+set @innodb_pages_read1= 
+(select variable_value 
+from information_schema.session_status 
+where variable_name like 'innodb_pages_read');
+set @innodb_pages_read_incr= (@innodb_pages_read1 - @innodb_pages_read0);
+select @innodb_pages_read_incr > 1000, @innodb_pages_read_incr < 1500;
+@innodb_pages_read_incr > 1000	@innodb_pages_read_incr < 1500
+1	1
+set @js='$analyze_output';
+set @js=json_extract(@js, '$.query_block.table.r_engine_stats');
+# This must just print pages_accessed. No page reads or prefetch reads:
+select @js;
+@js
+{"pages_accessed": NUMBER}
+set @pages_accessed2= (select json_value(@js,'$.pages_accessed'));
+select @pages_accessed2 = @pages_accessed;
+@pages_accessed2 = @pages_accessed
+1
+drop table t1;
