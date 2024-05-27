@@ -1660,7 +1660,6 @@ public:
   {
     option.var_type|= GET_STR;
     SYSVAR_ASSERT(size == sizeof(plugin_ref));
-    SYSVAR_ASSERT(getopt.id < 0); // force NO_CMD_LINE
   }
   bool do_check(THD *thd, set_var *var)
   {
