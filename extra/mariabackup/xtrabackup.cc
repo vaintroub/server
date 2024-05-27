@@ -5398,9 +5398,8 @@ fail:
 		goto fail;
 	}
 
-	if (!log_sys.create()) {
-		goto fail;
-	}
+	log_sys.create();
+
 	/* get current checkpoint_lsn */
 	{
 		log_sys.latch.wr_lock(SRW_LOCK_CALL);
@@ -6757,9 +6756,7 @@ error:
 		}
 
 		recv_sys.create();
-		if (!log_sys.create()) {
-			goto error;
-		}
+		log_sys.create();
 		recv_sys.recovery_on = true;
 
 		xb_fil_io_init();

@@ -1754,7 +1754,7 @@ inline void log_t::write_checkpoint(lsn_t end_lsn) noexcept
   static_assert(CPU_LEVEL1_DCACHE_LINESIZE >= 64, "efficiency");
   static_assert(CPU_LEVEL1_DCACHE_LINESIZE <= 4096, "compatibility");
   byte* c= my_assume_aligned<CPU_LEVEL1_DCACHE_LINESIZE>
-    (is_pmem() ? buf + offset : checkpoint_buf);
+    (is_mmap() ? buf + offset : checkpoint_buf);
   memset_aligned<CPU_LEVEL1_DCACHE_LINESIZE>(c, 0, CPU_LEVEL1_DCACHE_LINESIZE);
   mach_write_to_8(my_assume_aligned<8>(c), next_checkpoint_lsn);
   mach_write_to_8(my_assume_aligned<8>(c + 8), end_lsn);
@@ -1762,8 +1762,7 @@ inline void log_t::write_checkpoint(lsn_t end_lsn) noexcept
 
   lsn_t resizing;
 
-#ifdef HAVE_PMEM
-  if (is_pmem())
+  if (is_mmap())
   {
     resizing= resize_lsn.load(std::memory_order_relaxed);
 
@@ -1771,12 +1770,26 @@ inline void log_t::write_checkpoint(lsn_t end_lsn) noexcept
     {
       memcpy_aligned<64>(resize_buf + CHECKPOINT_1, c, 64);
       header_write(resize_buf, resizing, is_encrypted());
-      pmem_persist(resize_buf, resize_target);
+#ifdef HAVE_PMEM
+      if (!is_opened())
+        pmem_persist(resize_buf, resize_target);
+#endif
     }
-    pmem_persist(c, 64);
+#ifdef HAVE_PMEM
+    if (!is_opened())
+      pmem_persist(c, 64);
+    else
+#endif
+    {
+#ifdef _WIN32
+      FlushViewOfFile(c, 64);
+      log.flush();
+#else
+      msync(c, my_system_page_size, MS_SYNC);
+#endif
+    }
   }
   else
-#endif
   {
     ut_ad(!checkpoint_pending);
     checkpoint_pending= true;

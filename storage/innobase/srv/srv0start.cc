@@ -1294,10 +1294,7 @@ dberr_t srv_start(bool create_new_db)
 	}
 #endif /* UNIV_DEBUG */
 
-	if (!log_sys.create()) {
-		return srv_init_abort(DB_ERROR);
-	}
-
+	log_sys.create();
 	recv_sys.create();
 	lock_sys.create(srv_lock_table_size);
 
