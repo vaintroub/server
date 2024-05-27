@@ -3432,7 +3432,7 @@ static bool xtrabackup_copy_mmap_logfile()
       if (metadata_to_lsn)
       {
         if (metadata_to_lsn <= recv_sys.lsn)
-          return true;
+          return false;
       }
       else if (xtrabackup_throttle && io_ticket-- < 0)
         mysql_cond_wait(&wait_throttle, &recv_sys.mutex);
