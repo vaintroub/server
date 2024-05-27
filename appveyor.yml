@@ -19,6 +19,7 @@ build_script:
   - cd _build
   - set BUILD_TYPE=MinSizeRel
   - set PATH=%OPENSSL_ROOT_DIR%;%PATH%
+  - dir C:\OpenSSL-v32-Win64\include\openssl\*
   - set GENERATOR=-GNinja
   - call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
   - cmake -E time cmake %GENERATOR% .. -DWITH_SSL=system -DOPENSSL_ROOT_DIR=%OPENSSL_ROOT_DIR% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DMYSQL_MAINTAINER_MODE=ERR -DFAST_BUILD=1 -DBISON_EXECUTABLE=C:\cygwin64\bin\bison.exe -DPLUGIN_PERFSCHEMA=NO -DPLUGIN_FEEDBACK=NO
