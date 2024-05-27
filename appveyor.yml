@@ -5,6 +5,11 @@ clone_depth: 1
 environment:
   OPENSSL_ROOT_DIR: C:/OpenSSL-v32-Win64
 
+artifacts:
+  - path: _build\CMakeFiles\**
+    name: build_cmake_files
+    type: zip
+
 build_script:
   # dump some system info
   - echo  processor='%PROCESSOR_IDENTIFIER%' , processor count= %NUMBER_OF_PROCESSORS%
