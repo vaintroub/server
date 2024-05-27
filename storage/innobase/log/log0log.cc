@@ -226,7 +226,7 @@ void log_t::attach_low(log_file_t file, os_offset_t size)
 #ifdef HAVE_PMEM
   ut_ad(!buf);
   ut_ad(!flush_buf);
-  if (size && !(size_t(size) & 4095))
+  if (size)
   {
     void *ptr= log_mmap(log.m_file, size);
     if (ptr != MAP_FAILED)
