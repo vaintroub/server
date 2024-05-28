@@ -4,6 +4,7 @@ source include/check_windows_admin.inc;
 let $ERROR_SERVICE_DOES_NOT_EXIST= 1060;
 let $ERROR_SERVICE_CANNOT_ACCEPT_CTRL=1061;# intermediate, during start or stop
 let $ERROR_SERVICE_NOT_ACTIVE=1062;# service stopped
+let $ERROR_SERVICE_REQUEST_TIMEOUT=1053; # should not happen
 
 let $sc_exe= C:\Windows\System32\sc.exe;
 let $ddir= $MYSQLTEST_VARDIR/tmp/$datadir_name;
@@ -26,6 +27,7 @@ exec $MYSQL_INSTALL_DB_EXE --datadir=$ddir --port=$MASTER_MYPORT --password=$pas
 
 echo # Start service;
 --disable_result_log
+--error 0,$ERROR_SERVICE_REQUEST_TIMEOUT
 exec $sc_exe start $service_name;
 --enable_result_log
 
