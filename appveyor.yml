@@ -1,9 +1,46 @@
 version: build-{build}~branch-{branch}
 
-clone_depth: 1
+clone_depth: 10
+
+skip_branch_with_pr: true
 
 environment:
-  OPENSSL_ROOT_DIR: C:/OpenSSL-v32-Win64
+  OPENSSL_ROOT_DIR: C:/OpenSSL-v34-Win64
+
+before_build:
+  - ps: |
+      # Retrieve the latest commit hash on the branch or PR
+      function Get-Remote-Ref($ref) {
+        try {
+          $result = git ls-remote origin $ref 2>$null
+          if (-not $result) {
+            "Warning: Could not fetch remote ref '$ref'"
+            return $null
+          }
+          return ($result -split "`t")[0]
+        } catch {
+          "Warning: Exception while running git ls-remote for '$ref': $_"
+          return $null
+        }
+      }
+      Get-ChildItem Env: | Where-Object { $_.Name -like 'APPVEYOR*' } | ForEach-Object { "$($_.Name)=$($_.Value)" }
+      $commit = $null
+      $latest = $null
+      if ($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null) {
+        "Branch build detected"
+        $commit = $env:APPVEYOR_REPO_COMMIT
+        $branch = $env:APPVEYOR_REPO_BRANCH
+        $latest = Get-Remote-Ref "refs/heads/$branch"
+      } else {
+        "Pull Request build detected"
+        $commit = $env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT
+        $pr = $env:APPVEYOR_PULL_REQUEST_NUMBER
+        $latest = Get-Remote-Ref "refs/pull/$pr/head"
+      }
+      if ($latest -and ($commit -ne $latest)) {
+        "Skipping outdated commit $commit (latest is $latest)"
+        Exit-AppVeyorBuild
+      }
 
 build_script:
   # dump some system info
