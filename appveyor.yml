@@ -9,7 +9,7 @@ environment:
 
 before_build:
   - ps: |
-      # Retrieve the latest commit hash on the branch/PR
+      # Retrieve the latest commit hash on the branch or PR
       function Get-Remote-Ref($ref) {
         try {
           $result = git ls-remote origin $ref 2>$null
