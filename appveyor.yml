@@ -14,29 +14,31 @@ before_build:
         try {
           $result = git ls-remote origin $ref 2>$null
           if (-not $result) {
-            Write-Host "Warning: Could not fetch remote ref '$ref'"
+            "Warning: Could not fetch remote ref '$ref'"
             return $null
           }
           return ($result -split "`t")[0]
         } catch {
-          Write-Host "Warning: Exception while running git ls-remote for '$ref': $_"
+          "Warning: Exception while running git ls-remote for '$ref': $_"
           return $null
         }
       }
-      Get-ChildItem Env: | Where-Object { $_.Name -like 'APPVEYOR*' }
-      $commit = $env:APPVEYOR_REPO_COMMIT
-      $branch = $env:APPVEYOR_REPO_BRANCH
+      Get-ChildItem Env: | Where-Object { $_.Name -like 'APPVEYOR*' } | ForEach-Object { "$($_.Name)=$($_.Value)" }
+      $commit = $null
       $latest = $null
       if ($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null) {
-        Write-Host "Branch build detected"
+        "Branch build detected"
+        $commit = $env:APPVEYOR_REPO_COMMIT
+        $branch = $env:APPVEYOR_REPO_BRANCH
         $latest = Get-Remote-Ref "refs/heads/$branch"
       } else {
-        Write-Host "Pull Request build detected"
+        "Pull Request build detected"
+        $commit = $env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT
         $pr = $env:APPVEYOR_PULL_REQUEST_NUMBER
         $latest = Get-Remote-Ref "refs/pull/$pr/head"
       }
       if ($latest -and ($commit -ne $latest)) {
-        Write-Host "Skipping outdated commit $commit (latest is $latest)"
+        "Skipping outdated commit $commit (latest is $latest)"
         Exit-AppVeyorBuild
       }
 
