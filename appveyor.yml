@@ -35,7 +35,7 @@ before_build:
         $latest = Get-Remote-Ref "refs/pull/$pr/head"
       }
       if ($latest -and ($commit -ne $latest)) {
-        Skip-Build "Skipping outdated commit $commit (latest is $latest)"
+        Write-Host "Skipping outdated commit $commit (latest is $latest)"
         Exit-AppVeyorBuild
       }
 
