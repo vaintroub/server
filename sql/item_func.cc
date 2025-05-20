@@ -851,8 +851,10 @@ String *Item_func_hybrid_field_type::val_str_from_int_op(String *str)
 
 double Item_func_hybrid_field_type::val_real_from_int_op()
 {
-  longlong result= int_op();
-  return unsigned_flag ? (double) ((ulonglong) result) : (double) result;
+  if (unsigned_flag)
+    return (double) ((ulonglong) int_op());
+  else
+    return (double) (int_op());
 }
 
 my_decimal *
