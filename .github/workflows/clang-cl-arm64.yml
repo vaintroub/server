@@ -26,6 +26,16 @@ jobs:
         run: |
           choco install winflexbison3 ninja
 
+      - name: Install Latest LLVM (manual installer)
+        shell: pwsh
+        run: |
+           $llvmVersion = "19.1.7"  # Replace with latest stable version
+           $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-woa64.exe"
+           $installer = "$env:TEMP\llvm-installer.exe"
+           Invoke-WebRequest $url -OutFile $installer
+           Start-Process -Wait -FilePath $installer -ArgumentList "/S", "/D=C:\LLVM"
+           echo "C:\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Build project
         run: |      
           git config submodule.storage/columnstore/columnstore.update none
@@ -34,8 +44,9 @@ jobs:
           git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
+          set PATH=C:\LLVM\bin;%PATH%
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" arm64
-          cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -GNinja -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_C_COMPILER_TARGET=arm64-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-windows-msvc  -DCMAKE_LINKER=link
+          cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -GNinja -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_C_COMPILER_TARGET=arm64-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-windows-msvc
           cmake --build . --verbose
           cmake --build . --target win_package_zip
         shell: cmd
