@@ -35,9 +35,11 @@ jobs:
           git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -GNinja
           cmake --build . --verbose
           cmake --build . --target win_package_zip
+        shell: cmd
 
       - name: Test
         run: |
