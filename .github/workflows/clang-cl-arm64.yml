@@ -1,0 +1,54 @@
+name: clang-cl ARM64
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+
+    steps:
+      - name: Configure git
+        run: |
+          # Nope, we won't be able to successfully run test
+          # if you do not configure that freaking autocrlf
+          git config --global core.autocrlf input
+
+      - uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          echo Processor Architecture: $Env:PROCESSOR_ARCHITECTURE
+          systeminfo
+          where.exe perl.exe
+      - name: Install bison
+        run: |
+          choco install winflexbison3
+
+      - name: Build project
+        run: |
+          # speedup checkout by excluding uninteresting modules
+          git config submodule.storage/columnstore/columnstore.update none
+          git config submodule.storage/maria/libmarias3.update none
+          git config submodule.storage/rocksdb/rocksdb.update none
+          git config submodule.wsrep-lib.update none
+          mkdir bld
+          cd bld
+          cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -GNinja
+          cmake --build . --verbose
+          cmake --build . --target win_package_zip
+
+      - name: Test
+        run: |
+          dir "C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
+          $env:PATH = "C:\Strawberry\perl\bin;$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
+          #Calculate parallel as 4 * number of processors
+          $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
+          # Run mtr, skip unit.tzinfo
+          perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --retry=2 --parallel=$parallel `
+            --testcase-timeout=4 --suite=main,unit --skip-test=unit.my_tzinfo,main.charset_client_win_utf8mb4 `
+            --mysqld=--loose-innodb-flush-log-at-trx-commit=2
+          # charset_client_win_utf8mb4 can't run in parallel
+          perl bld\mysql-test\mysql-test-run.pl --suite=main main.charset_client_win_utf8mb4
+

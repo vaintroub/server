@@ -222,11 +222,8 @@ IF(MSVC)
 -Wno-unused-parameter -Wno-inconsistent-missing-override \
 -Wno-unused-command-line-argument -Wno-pointer-sign \
 -Wno-deprecated-register -Wno-missing-braces \
--Wno-unused-function -Wno-unused-local-typedef -msse4.2 "
+-Wno-unused-function -Wno-unused-local-typedef "
     )
-    IF(CMAKE_SIZEOF_VOID_P MATCHES 8)
-      STRING(APPEND CLANG_CL_FLAGS "-mpclmul ")
-    ENDIF()
     STRING(APPEND CMAKE_C_FLAGS " ${CLANG_CL_FLAGS} ${MSVC_CRT_TYPE}")
     STRING(APPEND CMAKE_CXX_FLAGS " ${CLANG_CL_FLAGS}  ${MSVC_CRT_TYPE}")
   ENDIF()
