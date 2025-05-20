@@ -15,6 +15,7 @@ static unsigned crc32c_aarch64_pmull(unsigned, const void *, size_t);
 
 #ifdef _WIN32
 #include <windows.h>
+
 int crc32_aarch64_available(void)
 {
   return IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE);
@@ -143,7 +144,7 @@ asm(".arch_extension crypto");
 #else /* HAVE_ARMV8_CRC_CRYPTO_INTRINSICS  */
 
 /* Intrinsics header*/
-#ifndef _WIN32
+#if !defined _MSC_VER || defined __clang__
 #include <arm_acle.h>
 #endif
 
