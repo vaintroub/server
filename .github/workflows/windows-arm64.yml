@@ -9,6 +9,12 @@ jobs:
     runs-on: windows-11-arm
 
     steps:
+      - name: Configure git
+        run: |
+          # Nope, we won't be able to successfully run test
+          # if you do not configure that freaking autocrlf
+          git config --global core.autocrlf input
+
       - uses: actions/checkout@v4
 
       - name: Show environment
@@ -22,9 +28,14 @@ jobs:
 
       - name: Build project
         run: |
+          # speedup checkout by excluding uninteresting modules
+          git config submodule.storage/columnstore/columnstore.update none
+          git config submodule.storage/maria/libmarias3.update none
+          git config submodule.storage/rocksdb/rocksdb.update none
+          git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
-          cmake .. -DWITH_SSL=bundled -DWITH_UNIT_TESTS=0
+          cmake .. -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo --verbose -- -m
           cmake --build . --config RelWithDebInfo --target win_package_zip
 
