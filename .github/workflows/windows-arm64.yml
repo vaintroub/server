@@ -47,6 +47,6 @@ jobs:
           $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
           # Run mtr, skip unit.tzinfo
           perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --retry=2 --parallel=$parallel `
-            --testcase-timeout=4 --suite=main,unit --skip-tests=unit.my_tzinfo `
+            --testcase-timeout=4 --suite=main,unit --skip-test=unit.my_tzinfo `
             --mysqld=--loose-innodb-flush-log-at-trx-commit=2
    
