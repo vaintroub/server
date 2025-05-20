@@ -86,7 +86,7 @@ static int sync_icu_timezone()
     Find ICU timezone with the same UTC and DST offsets
     and name as C runtime.
   */
-  en= ucal_openTimeZoneIDEnumeration(UCAL_ZONE_TYPE_ANY, nullptr,
+  en= ucal_openTimeZoneIDEnumeration(UCAL_ZONE_TYPE_CANONICAL_LOCATION, nullptr,
                                      &timezone_offset_ms, &ec);
   if (U_FAILURE(ec))
     return -1;
