@@ -1,4 +1,4 @@
-name: Build on Windows ARM64
+name: Build on Windows X64
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-11-arm
+    runs-on: windows-latest
 
     steps:
       - name: Configure git
@@ -35,14 +35,14 @@ jobs:
           git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
-          cmake .. -DWITH_SSL=bundled
+          cmake .. -DWITH_SSL=system
           cmake --build . --config RelWithDebinfo --verbose -- -m
           cmake --build . --config RelWithDebInfo --target win_package_zip
 
       - name: Test
         run: |
-          dir "C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
-          $env:PATH = "C:\Strawberry\perl\bin;$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
+          dir "C:\Program Files (x86)\Windows Kits\10\Debuggers"
+          $env:PATH = "C:\Strawberry\perl\bin;$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
           #Calculate parallel as 4 * number of processors
           $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
           # Run mtr, skip unit.tzinfo
