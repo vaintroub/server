@@ -1,0 +1,29 @@
+name: Build on Windows ARM64
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          echo Processor Architecture: $Env:PROCESSOR_ARCHITECTURE
+          systeminfo
+          where.exe perl.exe
+      - name: Install bison
+        run: |
+          choco install winflexbison3
+
+      - name: Build project
+        run: |
+          mkdir bld
+          cd bld
+          cmake .. -DWITH_UNIT_TESTS=0
+          cmake --build . --config RelWithDebinfo --verbose -- -m
+          cmake --build . --config RelWithDebInfo --target win_package_zip
