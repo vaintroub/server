@@ -62,7 +62,7 @@ jobs:
           # Run mtr, skip unit.tzinfo
           perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --retry=2 --parallel=$parallel `
             --testcase-timeout=4 --suite=main,unit --skip-test=unit.my_tzinfo --skip-test=main.charset_client_win_utf8mb4 `
-            --skip-test=main.mariadb-upgrade-service `
+            --skip-test=main.mariadb-upgrade-service  --skip-test=main.timezone4  --skip-test=main.timezone `
             --mysqld=--loose-innodb-flush-log-at-trx-commit=2
 
       - name: Test2

@@ -155,6 +155,11 @@ extern "C" void my_tzset()
   */
   (void) CoInitializeEx(NULL, COINITBASE_MULTITHREADED);
   use_icu_for_tzinfo= !sync_icu_timezone();
+  if (!use_icu_for_tzinfo)
+  {
+    fprintf(stderr, "ICU timezone synchronization failed\n");
+    abort();
+  }
 #endif
 }
 
@@ -176,10 +181,19 @@ extern "C" void my_tzname(char* sys_timezone, size_t size)
     if (U_SUCCESS(ec))
     {
       u_austrncpy(sys_timezone, default_tzname, (int32_t) size);
+      if (strcmp(sys_timezone, "Coordinated Universal Time") == 0)
+      {
+        fprintf(stderr,
+                "ERROR: Catastrphos Coordinated Universal Time\n");
+        __debugbreak();
+      }
       return;
     }
     //use_icu_for_tzinfo= false;
   }
+  
+  fprintf(stderr,"ERROR: Catastrphos use_icu_for_tzinfo=0\n");
+  __debugbreak();
 #endif
   struct tm tm;
   time_t t;
