@@ -56,7 +56,7 @@ jobs:
 
       - name: Test
         run: |
-          $env:PATH = "$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
+          $env:PATH = "C:\Strawberry\perl\bin;$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
           #Calculate parallel as 4 * number of processors
           $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
           # Run mtr, skip unit.tzinfo
