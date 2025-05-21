@@ -51,6 +51,10 @@ jobs:
           cmake --build . --target win_package_zip
         shell: cmd
 
+      - name: List all environment variables (PowerShell)
+        shell: pwsh
+        run: Get-ChildItem Env:
+
       - name: Test
         run: |
           dir "C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
@@ -58,6 +62,7 @@ jobs:
           #Calculate parallel as 4 * number of processors
           $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
           # Run mtr, skip unit.tzinfo
+          Remove-Item Env:TZ
           perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --retry=2 --parallel=$parallel `
             --testcase-timeout=4 --suite=main,unit --skip-test=unit.my_tzinfo,main.charset_client_win_utf8mb4,main.mariadb-upgrade-service `
             --mysqld=--loose-innodb-flush-log-at-trx-commit=2
