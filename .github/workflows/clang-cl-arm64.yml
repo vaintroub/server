@@ -51,9 +51,9 @@ jobs:
           cmake --build . --target win_package_zip
         shell: cmd
 
-      - name: List all environment variables (PowerShell)
-        shell: pwsh
-        run: Get-ChildItem Env:
+      - name: List all environment variables
+        shell: cmd
+        run: set
 
       - name: Test
         run: |
