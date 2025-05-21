@@ -66,12 +66,15 @@ static void icu_get_tzinfo(time_t t, my_tz* tz)
   @return 0  success
           -1 otherwise
 */
+static int sync_icu_timezone_counter= 0;
+
 static int sync_icu_timezone()
 {
   const char *tz_env= getenv("TZ");
   UErrorCode ec= U_ZERO_ERROR;
   UEnumeration *en= nullptr;
   int ret= -1;
+  sync_icu_timezone_counter++;
 
   if (!tz_env || tz_env[0] == ':')
   {
@@ -171,6 +174,12 @@ extern "C" void my_tzset()
 extern "C" void my_tzname(char* sys_timezone, size_t size)
 {
 #ifdef _WIN32
+  if (!sync_icu_timezone_counter)
+  {
+    fprintf(stderr, "my_tzname() called before my_tzset()\n");
+    abort();
+  }
+
   if (use_icu_for_tzinfo)
   {
     /* TZ environment variable not set - return default timezone name*/
@@ -188,6 +197,12 @@ extern "C" void my_tzname(char* sys_timezone, size_t size)
         __debugbreak();
       }
       return;
+    }
+    else
+    {
+      fprintf(stderr, "ucal_getDefaultTimeZone returns error %s\n",
+              u_errorName(ec));
+      abort();
     }
     //use_icu_for_tzinfo= false;
   }
