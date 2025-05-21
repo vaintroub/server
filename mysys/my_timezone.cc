@@ -73,9 +73,9 @@ static int sync_icu_timezone()
   UEnumeration *en= nullptr;
   int ret= -1;
 
-  if (!tz_env)
+  if (!tz_env || tz_env[0] == ':')
   {
-    /* TZ environment variable not set - use default timezone*/
+    /* TZ environment variable not set, or some Linux-ly path (colon) - use default timezone*/
     return 0;
   }
 
@@ -89,8 +89,13 @@ static int sync_icu_timezone()
   en= ucal_openTimeZoneIDEnumeration(UCAL_ZONE_TYPE_ANY, nullptr,
                                      &timezone_offset_ms, &ec);
   if (U_FAILURE(ec))
+  {
+    fprintf(stderr, "ucal_openTimeZoneIDEnumeration returns error %s\n",
+            u_errorName(ec));
+    abort();
     return -1;
 
+  }
   for (;;)
   {
     int32_t len;
@@ -123,6 +128,12 @@ static int sync_icu_timezone()
     }
   }
   uenum_close(en);
+  if (!ret)
+  {
+    fprintf(stderr, "env.variable TZ is set!! TZ=%s\n", tz_env);
+    abort();
+  }
+
   return ret;
 }
 #endif /* _WIN32 */
