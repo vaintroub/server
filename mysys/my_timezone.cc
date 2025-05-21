@@ -167,7 +167,7 @@ extern "C" void my_tzname(char* sys_timezone, size_t size)
       u_austrncpy(sys_timezone, default_tzname, (int32_t) size);
       return;
     }
-    use_icu_for_tzinfo= false;
+    //use_icu_for_tzinfo= false;
   }
 #endif
   struct tm tm;
