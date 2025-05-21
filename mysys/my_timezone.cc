@@ -27,7 +27,7 @@
 #include <objbase.h>
 #define MAX_TZ_ABBR 64
 
-static bool use_icu_for_tzinfo;
+static bool use_icu_for_tzinfo = true;
 
 /*
   Retrieve GMT offset and timezone abbreviation using ICU.
