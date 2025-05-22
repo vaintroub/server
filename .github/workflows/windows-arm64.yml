@@ -39,7 +39,7 @@ jobs:
           git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
-          cmake .. -DWITH_SSL=bundled -DWITH_UNIT_TESTS=0 -DWITHOUT_DYNAMIC_PLUGINS=1 -DPLUGIN_PERFSCHEMA=NO -DWITH_MARIABACKUP=0
+          cmake .. -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo --verbose -- -m
           cmake --build . --config RelWithDebInfo --target MSI
 
