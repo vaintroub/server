@@ -104,7 +104,7 @@ static void log(const char *fmt, ...)
   fflush(stdout);
 }
 
-
+ATTRIBUTE_NORETURN
 static void die(const char *fmt, ...)
 {
   va_list args;
@@ -344,7 +344,7 @@ static void get_service_config()
   if (!service)
     die("OpenService failed with %u", GetLastError());
 
-  alignas(8) BYTE config_buffer[8 * 1024];
+  alignas(QUERY_SERVICE_CONFIGW) BYTE config_buffer[8 * 1024];
   LPQUERY_SERVICE_CONFIGW config = (LPQUERY_SERVICE_CONFIGW)config_buffer;
   DWORD size = sizeof(config_buffer);
   DWORD needed;
