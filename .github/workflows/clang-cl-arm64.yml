@@ -45,7 +45,7 @@ jobs:
           cd bld
           set PATH=C:\LLVM\bin;%PATH%
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" arm64
-          cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -GNinja -DCMAKE_SYSTEM_PROCESSOR=ARM64
+          cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_LINKER=lld-link -GNinja -DCMAKE_SYSTEM_PROCESSOR=ARM64
           cmake --build . 
           cmake --build . --target win_package_zip
         shell: cmd
