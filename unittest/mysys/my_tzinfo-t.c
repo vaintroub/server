@@ -145,6 +145,18 @@ static void test_default_timezone()
   /* Expect timezone name like Europe/Berlin */
   ok(strstr(timezone_name, "/") != NULL, "Default timezone name %s",
      timezone_name);
+#ifdef _M_ARM64
+  if (strcmp(timezone_name, "Etc/UTC") == 0)
+  {
+    /*
+    Seen on cloud hosts, old-ish Windows,
+    summer/winter offsets from UTC are equal for PST8PDT
+    Unclear how to get default timezone as UTC.
+    */
+    skip_all("Weird timezone config\n");
+  }
+#endif
+
 #else
   skip(1, "no test for default timezone name %s", timezone_name);
 #endif
