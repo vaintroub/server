@@ -23,6 +23,16 @@
 #include "tap.h"
 #include <stdlib.h>
 
+#ifdef _WIN32
+/*
+ On Windows, switching to a DST timezone (e.g. PST8PDT) via the TZ environment
+ variable is unreliable, if the system timezone is non-DST (e.g. GMT). In this
+ case, winter and summer GMT offsets will incorrectly be the same, but should
+ differ by 1 hour. This is a known bug in the Windows C runtime.
+*/
+static int win_dst_bug;
+#endif
+
 /**
   Seconds since epoch used for "summer" timestamp
   Corresponds to Jul 22 2023 04:26:40 GMT
@@ -113,7 +123,12 @@ void test_timezone(const char *tz_env, const char **expected_tznames,
   }
   ok(found, "%s: timezone_name = %s", tz_env, timezone_name);
   my_tzinfo(SUMMER_TIMESTAMP, &tz);
-  ok(summer_gmt_off == tz.seconds_offset, "%s: Summer GMT offset %ld", tz_env, tz.seconds_offset);
+#ifdef _WIN32
+  if (win_dst_bug && summer_gmt_off != winter_gmt_off)
+    skip(1, "workaround windows DST bug");
+  else
+#endif
+    ok(summer_gmt_off == tz.seconds_offset, "%s: Summer GMT offset %ld", tz_env, tz.seconds_offset);
   check_utc_offset(SUMMER_TIMESTAMP,tz.seconds_offset, tz_env);
 
   ok(!strcmp(summer_time_abbr, tz.abbreviation), "%s: Summer time abbreviation %s",
@@ -145,18 +160,6 @@ static void test_default_timezone()
   /* Expect timezone name like Europe/Berlin */
   ok(strstr(timezone_name, "/") != NULL, "Default timezone name %s",
      timezone_name);
-#ifdef _M_ARM64
-  if (strcmp(timezone_name, "Etc/UTC") == 0)
-  {
-    /*
-    Seen on cloud hosts, old-ish Windows,
-    summer/winter offsets from UTC are equal for PST8PDT
-    Unclear how to get default timezone as UTC.
-    */
-    skip_all("Weird timezone config\n");
-  }
-#endif
-
 #else
   skip(1, "no test for default timezone name %s", timezone_name);
 #endif
@@ -178,6 +181,16 @@ int main(int argc __attribute__((unused)), char *argv[])
   const char *GST_minus1GDT_names[]= {"GST", "GDT", NULL};
   const char *IST_names[]= {"IST",NULL};
   MY_INIT(argv[0]);
+
+#ifdef _WIN32
+  /*
+    Check if the current Windows timezone is DST-aware. If not,
+    skip some tests to work around a known Windows C runtime bug
+    See description of win_dst_bug variable.
+  */
+  TIME_ZONE_INFORMATION tzi;
+  win_dst_bug= GetTimeZoneInformation(&tzi) == TIME_ZONE_ID_UNKNOWN;
+#endif
 
   plan(38);
   test_default_timezone();
