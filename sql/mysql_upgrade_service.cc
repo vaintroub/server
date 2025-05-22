@@ -24,6 +24,7 @@
 #include <process.h>
 #include <my_getopt.h>
 #include <my_sys.h>
+#include <my_stacktrace.h>
 #include <m_string.h>
 #include <mysql_version.h>
 #include <winservice.h>
@@ -438,6 +439,41 @@ static void wait_for_server_startup(HANDLE process, const char *named_pipe, DWOR
   }
 }
 
+static LONG WINAPI exception_filter(EXCEPTION_POINTERS *exp)
+{
+  __try
+  {
+    my_set_exception_pointers(exp);
+    my_write_core(exp->ExceptionRecord->ExceptionCode);
+    my_print_stacktrace(0, 0, 0);
+  }
+  __except(EXCEPTION_EXECUTE_HANDLER)
+  {
+    fputs("Got exception in exception handler!\n", stderr);
+  }
+
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
+
+static void init_signal_handling(void)
+{
+  UINT mode;
+
+  /* Set output destination of messages to the standard error stream. */
+  _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
+  _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+  _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+
+  /* Do not not display the a error message box. */
+  mode= SetErrorMode(0) | SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX;
+  SetErrorMode(mode);
+
+  SetUnhandledExceptionFilter(exception_filter);
+}
 
 int main(int argc, char **argv)
 {
@@ -445,7 +481,7 @@ int main(int argc, char **argv)
   MY_INIT(argv[0]);
   char bindir[FN_REFLEN];
   char *p;
-
+  init_signal_handling();
   /* Parse options */
   if ((error= handle_options(&argc, &argv, my_long_options, get_one_option)))
     die("");
