@@ -109,20 +109,17 @@ jobs:
             Write-Error "mysql.exe not found at $mysqlExe"
             exit 1
           }
-          & $mysqlExe -uroot "--password=$rootPassword" -e "select 1"
+          & $mysqlExe -uroot "--password=$rootPassword" -e "show variables like '%version%'"
           if ($LASTEXITCODE -ne 0) {
              Write-Error "Smoke test failed"
              exit 1
           }
           # Get product code for uninstall
           $installer = New-Object -ComObject WindowsInstaller.Installer
-          $database = $installer.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $installer, @($msiPath, 0))
-          $query = "SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'"
-          $view = $database.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $database, ($query))
-          $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
-          $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
-          $productCode = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 1)
-          Write-Host "ProductCode: $productCode"
+          # Open the MSI database in read-only mode (0 = read-only)
+          $view = $installer.OpenDatabase($msiPath, 0).OpenView("SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'")
+          $view.Execute()
+          $productCode= $view.Fetch().StringData(1)
 
           echo "Uninstalling product code: $productCode"
           $uninstallArgs = "/x $productCode /qn /norestart"
