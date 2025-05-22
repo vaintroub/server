@@ -59,7 +59,7 @@ jobs:
           $rootPassword = "b1ctUj5rcRSADLC"
           $logPath = "$env:RUNNER_TEMP\msi-install.log"
           # Install MSI
-          $installArgs = "/i `"$msiPath`" INSTALLDIR=`"$installDir`" SERVICE=$serviceName PASSWORD=$rootPassword /qn /norestart /l*v `"$logPath`""
+          $installArgs = "/i `"$msiPath`" INSTALLDIR=`"$installDir`" SERVICENAME=$serviceName PASSWORD=$rootPassword /qn /norestart /l*v `"$logPath`""
           echo "Installing MSI: $msiPath , args=$installArgs "
           $process = Start-Process msiexec.exe -Wait -PassThru  -ArgumentList $installArgs
           $exitCode = $process.ExitCode
@@ -115,12 +115,15 @@ jobs:
              exit 1
           }
           # Get product code for uninstall
-          $product = Get-WmiObject Win32_Product | Where-Object { $_.InstallLocation -eq $installDir } | Select-Object -First 1
-          if (-not $product) {
-               Write-Error "Could not determine MSI product for uninstall"
-               exit 1
-          }
-          $productCode = $product.IdentifyingNumber
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $installer, @($msiPath, 0))
+          $query = "SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'"
+          $view = $database.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $database, ($query))
+          $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+          $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+          $productCode = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 1)
+          Write-Host "ProductCode: $productCode"
+
           echo "Uninstalling product code: $productCode"
           $uninstallArgs = "/x $productCode /qn /norestart"
           Start-Process msiexec.exe -Wait -NoNewWindow -ArgumentList $uninstallArgs
