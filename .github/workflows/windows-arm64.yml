@@ -39,7 +39,7 @@ jobs:
           git config submodule.wsrep-lib.update none
           mkdir bld
           cd bld
-          cmake .. -DWITH_SSL=bundled
+          cmake .. -DWITH_SSL=bundled -DWITH_UNIT_TESTS=0 -DWITHOUT_DYNAMIC_PLUGINS=1 -DPLUGIN_PERFSCHEMA=NO -DWITH_MARIABACKUP=0
           cmake --build . --config RelWithDebinfo --verbose -- -m
           cmake --build . --config RelWithDebInfo --target MSI
 
@@ -61,12 +61,13 @@ jobs:
           # Install MSI
           $installArgs = "/i `"$msiPath`" INSTALLDIR=`"$installDir`" SERVICE=$serviceName PASSWORD=$rootPassword /qn /norestart /l*v `"$logPath`""
           echo "Installing MSI: $msiPath , args=$installArgs "
-          $process = Start-Process msiexec.exe -Wait -NoNewWindow -ArgumentList $installArgs
+          $process = Start-Process msiexec.exe -Wait -PassThru  -ArgumentList $installArgs
+          $exitCode = $process.ExitCode
           if ($process.ExitCode -ne 0) {
-            Write-Error "MSI installation failed with exit code $($process.ExitCode)"
-            echo "::group::MSI Install Log"
+            Write-Error "MSI installation failed with exit code $exitCode"
+            echo "MSI Install Log"
             Get-Content $logPath
-            echo "::endgroup::"
+            echo "endgroup"
             exit 1
           }
           # Wait for Windows service to reach "Running"
