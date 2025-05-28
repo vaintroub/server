@@ -200,19 +200,8 @@ extern ulonglong strtoull(const char *str, char **ptr, int base);
 
 #include <mysql/plugin.h>
 
-#ifdef __cplusplus
-#include <type_traits>
-template<typename T> inline constexpr const char *_swl_check(T s)
-{
-  static_assert(std::is_same<T, const char (&)[sizeof(T)]>::value
-             || std::is_same<T, const char [sizeof(T)]>::value,
-             "Wrong argument for STRING_WITH_LEN()");
-  return s;
-}
-#define STRING_WITH_LEN(X) _swl_check<decltype(X)>(X), ((size_t) (sizeof(X) - 1))
-#else
+
 #define STRING_WITH_LEN(X) (X ""), ((size_t) (sizeof(X) - 1))
-#endif
 
 #define USTRING_WITH_LEN(X) (uchar*) STRING_WITH_LEN(X)
 #define C_STRING_WITH_LEN(X) (char *) STRING_WITH_LEN(X)
