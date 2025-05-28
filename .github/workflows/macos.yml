@@ -38,7 +38,8 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
-          cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DWITH_SSL=bundled
+          xcode-select --switch /Applications/Xcode.app
+          cmake .. -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo
 
       - name: Test MTR
