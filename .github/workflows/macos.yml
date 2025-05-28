@@ -1,0 +1,47 @@
+name: Build on macOS
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'bb-*'
+      - '[0-9]+.[0-9]+'
+      - '*wlad*'
+  pull_request:
+
+jobs:
+  build:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bison
+        run: |
+          # brew update
+          brew install bison
+
+      - name: Add Bison to PATH
+        run: echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
+
+      - name: Verify Bison Version
+        run: bison --version
+
+      - name: Build
+        run: |
+          # speedup checkout by excluding uninteresting modules
+          git config submodule.storage/columnstore/columnstore.update none
+          git config submodule.storage/maria/libmarias3.update none
+          git config submodule.storage/rocksdb/rocksdb.update none
+          mkdir bld
+          cd bld
+          cmake .. -GXcode -DWITH_SSL=bundled
+          cmake --build . --config RelWithDebinfo --verbose
+
+      - name: Test MTR
+        run: |
+          perl bld/mysql-test/mysql-test-run.pl --force --parallel=auto --suite=main `
+            --mysqld=--loose-innodb-flush-log-at-trx-commit=2 --mysqld=--loose-debug-no-sync=1
