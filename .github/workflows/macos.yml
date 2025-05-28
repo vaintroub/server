@@ -38,6 +38,7 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
+          export CXX=-stdlib=libc++
           cmake .. -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo
 
