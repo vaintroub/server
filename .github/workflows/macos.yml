@@ -29,7 +29,8 @@ jobs:
 
       - name: Verify Bison Version
         run: bison --version
-
+      - name: Fix Xcode
+        run: xcode-select --install
       - name: Build
         run: |
           # speedup checkout by excluding uninteresting modules
@@ -39,7 +40,7 @@ jobs:
           mkdir bld
           cd bld
           cmake .. -GXcode -DWITH_SSL=bundled -DMYSQL_MAINTAINER_MODE=OFF
-          cmake --build . --config RelWithDebinfo --verbose
+          cmake --build . --config RelWithDebinfo
 
       - name: Test MTR
         run: |
