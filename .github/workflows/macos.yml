@@ -38,7 +38,7 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
-          xcode-select --switch /Applications/Xcode.app
+          sudo xcode-select --switch /Applications/Xcode.app
           cmake .. -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo
 
