@@ -38,7 +38,7 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
-          cmake .. -GXcode -DWITH_SSL=bundled
+          cmake .. -GXcode -DWITH_SSL=bundled -DMYSQL_MAINTAINER_MODE=OFF
           cmake --build . --config RelWithDebinfo --verbose
 
       - name: Test MTR
