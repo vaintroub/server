@@ -35,6 +35,7 @@ SET(MY_WARNING_FLAGS
   -Wno-null-conversion
   -Wno-unused-parameter
   -Wno-unused-private-field
+  -Wno-error=nullability-completeness
   -Wnon-virtual-dtor
   -Woverloaded-virtual
   -Wvla
