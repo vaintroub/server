@@ -443,10 +443,10 @@ CONFIGURE_FILE(
 ADD_CUSTOM_TARGET(dist
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/make_dist.cmake
   DEPENDS ${CMAKE_BINARY_DIR}/sql/yy_mariadb.cc ${CMAKE_BINARY_DIR}/sql/yy_mariadb.hh
-  DEPENDS ${CMAKE_BINARY_DIR}/sql/yy_oracle.cc ${CMAKE_BINARY_DIR}/sql/yy_oracle.hh
+          ${CMAKE_BINARY_DIR}/sql/yy_oracle.cc ${CMAKE_BINARY_DIR}/sql/yy_oracle.hh
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
-
+ADD_DEPENDENCIES(dist gen_lex_token GenServerSource)
 ADD_CUSTOM_TARGET(distclean
   COMMAND ${CMAKE_COMMAND} -E echo  WARNING: distclean target is not functional
   COMMAND ${CMAKE_COMMAND} -E echo  Use 'git clean -Xdf' instead
