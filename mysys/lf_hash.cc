@@ -22,6 +22,7 @@
      for non-unique hash, count only _distinct_ values
      (but how to do it in lf_hash_delete ?)
 */
+#include <my_global.h>
 #include "mysys_priv.h"
 #include <m_string.h>
 #include <mysys_err.h>
