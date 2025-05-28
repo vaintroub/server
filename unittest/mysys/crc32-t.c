@@ -92,6 +92,22 @@ static const char STR[]=
   "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
   "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
 
+void init_buf(char* buffer, size_t len)
+{
+  const char pattern[]= "Every homomorphic image of a group is isomorphic to "
+                        "a quotient of the group";
+  size_t pattern_len= sizeof(pattern);
+  size_t offset= 0;
+  while (offset + pattern_len < len)
+  {
+    memcpy(buf + offset, pattern, pattern_len);
+    offset+= pattern_len;
+  }
+  size_t remaining= len - offset;
+  if (remaining > 0)
+    memcpy(buf + offset, pattern, remaining);
+}
+
 int main(int argc __attribute__((unused)),char *argv[])
 {
   MY_INIT(argv[0]);
@@ -136,7 +152,7 @@ int main(int argc __attribute__((unused)),char *argv[])
   DO_TEST_CRC32C(0,STR,(sizeof(STR)-1));
   ok(0 == my_crc32c(0, NULL, 0), "crc32c data = NULL, length = 0");
 
-  memset(buf, 0x5a, sizeof buf);
+  init_buf(buf, sizeof(buf));
   ok(0 == test_buf(my_checksum, crc32), "crc32 with various lengths");
   ok(0 == test_buf(my_crc32c, crc32c), "crc32c with various lengths");
 
