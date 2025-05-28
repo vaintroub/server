@@ -25,7 +25,7 @@ jobs:
           brew install bison
 
       - name: Add Bison to PATH
-        run: echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
+        run: echo "/usr/local/opt/bison/bin" >> $GITHUB_PATH
 
       - name: Verify Bison Version
         run: bison --version
