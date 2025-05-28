@@ -38,8 +38,7 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
-          export CXXFLAGS=-stdlib=libc++
-          cmake .. -DWITH_SSL=bundled
+          cmake .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo
 
       - name: Test MTR
