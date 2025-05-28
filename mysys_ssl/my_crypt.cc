@@ -16,6 +16,7 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
 #include <my_global.h>
+#include <new>
 #include <string.h>
 
 #define template _template /* bug in WolfSSL 4.4.0, see also violite.h */
