@@ -47,7 +47,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" arm64
           cmake .. -DWITH_SSL=bundled -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_LINKER=lld-link -GNinja -DCMAKE_SYSTEM_PROCESSOR=ARM64
           cmake --build . 
-          cmake --build . --target win_package_zip
+          unittest\mysys\crc32-t.exe
         shell: cmd
 
       - name: List all environment variables
@@ -59,11 +59,8 @@ jobs:
           $env:PATH = "C:\Strawberry\perl\bin;$env:PATH;C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
           #Calculate parallel as 4 * number of processors
           $parallel = 4 * [int]$env:NUMBER_OF_PROCESSORS
-          # Run mtr, skip unit.tzinfo
-          perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --retry=2 --parallel=$parallel `
-            --testcase-timeout=4 --suite=main,unit --skip-test=unit.my_tzinfo --skip-test=main.charset_client_win_utf8mb4 `
-            --skip-test=main.mariadb-upgrade-service  --skip-test=main.timezone4  --skip-test=main.timezone `
-            --mysqld=--loose-innodb-flush-log-at-trx-commit=2
+          perl bld\mysql-test\mysql-test-run.pl --force --max-test-fail=10 --parallel=$parallel `
+            --suite=main  --mysqld=--loose-innodb-flush-log-at-trx-commit=2
 
       - name: Test2
         run: |
