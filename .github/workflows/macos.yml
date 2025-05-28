@@ -39,7 +39,7 @@ jobs:
           mkdir bld
           cd bld
           sudo xcode-select --switch /Applications/Xcode.app
-          cmake .. -DWITH_SSL=bundled
+          cmake .. -DWITH_SSL=bundled -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9
           cmake --build . --config RelWithDebinfo
 
       - name: Test MTR
