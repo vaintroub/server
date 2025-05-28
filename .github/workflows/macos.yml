@@ -15,7 +15,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +38,7 @@ jobs:
           git config submodule.storage/rocksdb/rocksdb.update none
           mkdir bld
           cd bld
-          cmake .. -DCMAKE_C_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DWITH_SSL=bundled
+          cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DWITH_SSL=bundled
           cmake --build . --config RelWithDebinfo
 
       - name: Test MTR
