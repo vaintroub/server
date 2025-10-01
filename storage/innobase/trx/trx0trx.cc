@@ -1963,7 +1963,7 @@ trx_prepare(
 
 		We must not be holding any mutexes or latches here. */
 		if (auto f = srv_flush_log_at_trx_commit) {
-			log_write_up_to(lsn, (f & 1) && !my_disable_sync);
+			log_write_up_to(lsn, f & 1);
 		}
 
 		if (!UT_LIST_GET_LEN(trx->lock.trx_locks)
