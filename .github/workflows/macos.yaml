@@ -1,0 +1,165 @@
+name: MariaDB macOS CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mariadb-macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 15
+            runner: macos-15
+          - name: macOS 26 Intel
+            runner: macos-26-intel
+
+    env:
+      BUILD_DIR: build
+      INSTALL_DIR: ${{ github.workspace }}/install
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show runner info
+        shell: bash
+        run: |
+          set -euxo pipefail
+          uname -a
+          sw_vers
+          xcode-select -p
+          clang --version
+          cmake --version || true
+          brew --version
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          brew install \
+            bison \
+            ccache \
+            cmake \
+            ninja \
+            openssl@3 \
+            pcre2
+
+      - name: Export toolchain paths
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          BREW_PREFIX="$(brew --prefix)"
+          BISON_PREFIX="$(brew --prefix bison)"
+          CCACHE_PREFIX="$(brew --prefix ccache)"
+
+          {
+            echo "BREW_PREFIX=$BREW_PREFIX"
+            echo "BISON_PREFIX=$BISON_PREFIX"
+            echo "CCACHE_PREFIX=$CCACHE_PREFIX"
+            echo "PATH=$BISON_PREFIX/bin:$CCACHE_PREFIX/libexec:$BREW_PREFIX/bin:$PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ${{ runner.os }}-${{ matrix.runner }}-ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.runner }}-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-${{ matrix.runner }}-ccache-
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          export PATH="$BISON_PREFIX/bin:$CCACHE_PREFIX/libexec:$BREW_PREFIX/bin:$PATH"
+
+          cmake -S . -B "$BUILD_DIR" -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
+            -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DWITH_SSL=system \
+            -DWITH_UNIT_TESTS=ON \
+            -DWITH_EMBEDDED_SERVER=OFF
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build "$BUILD_DIR" --parallel "$(sysctl -n hw.ncpu)"
+
+      - name: Install
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --install "$BUILD_DIR"
+
+      - name: Run ctest
+        shell: bash
+        working-directory: ${{ github.workspace }}/build
+        run: |
+          set -euxo pipefail
+          ctest --output-on-failure --parallel "$(sysctl -n hw.ncpu)"
+
+      - name: Run MariaDB smoke tests
+        shell: bash
+        working-directory: ${{ github.workspace }}/build/mysql-test
+        run: |
+          set -euxo pipefail
+          perl ./mysql-test-run.pl \
+            --force \
+            --parallel=auto \
+            --retry=0 \
+            --suite=main \
+            mysql_client_test \
+            main.mysqld--help \
+            main.mysqlshow \
+            main.mysqladmin
+
+      - name: Debug package discovery
+        if: failure()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "BREW_PREFIX=$BREW_PREFIX"
+          ls -la "$BREW_PREFIX/include" || true
+          ls -la "$BREW_PREFIX/lib" || true
+          find "$BREW_PREFIX" -maxdepth 4 \( -name '*OpenSSL*cmake' -o -name '*PCRE*cmake' -o -name '*pcre2*cmake' \) || true
+          find "$BUILD_DIR" -name CMakeCache.txt -print -exec grep -Ei 'openssl|pcre|pcre2' {} \; || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mariadb-macos-logs-${{ matrix.runner }}
+          path: |
+            build/Testing/**/*
+            build/mysql-test/var/log/**/*
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+          if-no-files-found: ignore
