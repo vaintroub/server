@@ -7,14 +7,15 @@ clone_script:
     $ErrorActionPreference = "Continue"
 
     function gitx {
-      git @args 2>&1 | % { Write-Host $_ }
+      git @args 2>&1 | % { Write-Host "$_" }
       if ($LASTEXITCODE -ne 0) {
         throw "git failed: git $args"
       }
     }
 
-    git config --global core.autocrlf false
+    git config --global core.autocrlf input
     git config --global gc.auto 0
+    git config --global advice.detachedHead false
 
     $repo = $env:APPVEYOR_REPO_NAME
     $dir = $env:APPVEYOR_BUILD_FOLDER
@@ -30,13 +31,13 @@ clone_script:
         "https://github.com/$headRepo.git" $dir
 
       cd $dir
-      gitx checkout -f $headCommit
+      gitx checkout -q -f $headCommit
     } else {
       gitx clone --depth=1 --no-tags --branch $env:APPVEYOR_REPO_BRANCH `
         "https://github.com/$repo.git" $dir
 
       cd $dir
-      gitx checkout -f $env:APPVEYOR_REPO_COMMIT
+      gitx checkout -q -f $env:APPVEYOR_REPO_COMMIT
     }
 
 skip_branch_with_pr: true
