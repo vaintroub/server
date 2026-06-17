@@ -2,6 +2,43 @@ version: build-{build}~branch-{branch}
 
 clone_depth: 1
 
+clone_script:
+- ps: |
+    $ErrorActionPreference = "Continue"
+
+    function gitx {
+      git @args 2>&1 | % { Write-Host $_ }
+      if ($LASTEXITCODE -ne 0) {
+        throw "git failed: git $args"
+      }
+    }
+
+    git config --global core.autocrlf false
+    git config --global gc.auto 0
+
+    $repo = $env:APPVEYOR_REPO_NAME
+    $dir = $env:APPVEYOR_BUILD_FOLDER
+
+    rm -r -fo $dir -ea SilentlyContinue
+
+    if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
+      $headRepo = $env:APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME
+      $headBranch = $env:APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH
+      $headCommit = $env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT
+
+      gitx clone --depth=1 --no-tags --branch $headBranch `
+        "https://github.com/$headRepo.git" $dir
+
+      cd $dir
+      gitx checkout -f $headCommit
+    } else {
+      gitx clone --depth=1 --no-tags --branch $env:APPVEYOR_REPO_BRANCH `
+        "https://github.com/$repo.git" $dir
+
+      cd $dir
+      gitx checkout -f $env:APPVEYOR_REPO_COMMIT
+    }
+
 skip_branch_with_pr: true
 
 install:
