@@ -58,6 +58,8 @@ build_script:
   - set BUILD_TYPE=Debug
   - set GENERATOR=-G "Visual Studio 18 2026"
   - call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
+  # Get correct cmake, default one is outdated
+  - set PATH=C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%PATH%
   - cmake -E time cmake %GENERATOR% .. -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DMYSQL_MAINTAINER_MODE=ERR -DFAST_BUILD=1 -DPLUGIN_PERFSCHEMA=NO -DPLUGIN_FEEDBACK=NO
   - set /A jobs=2*%NUMBER_OF_PROCESSORS%
   - cmake -E time cmake --build . -j %jobs% --config %BUILD_TYPE% --target minbuild
