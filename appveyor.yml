@@ -56,7 +56,7 @@ build_script:
   - mkdir _build
   - cd _build
   - set BUILD_TYPE=Debug
-  - set GENERATOR=-GNinja
+  # - set GENERATOR=-GNinja
   - call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
   - cmake -E time cmake %GENERATOR% .. -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DMYSQL_MAINTAINER_MODE=ERR -DFAST_BUILD=1 -DPLUGIN_PERFSCHEMA=NO -DPLUGIN_FEEDBACK=NO
   - set /A jobs=2*%NUMBER_OF_PROCESSORS%
