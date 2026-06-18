@@ -1,7 +1,5 @@
 version: build-{build}~branch-{branch}
 
-clone_depth: 1
-
 clone_script:
 - ps: |
     $ErrorActionPreference = "Continue"
@@ -43,7 +41,7 @@ clone_script:
 skip_branch_with_pr: true
 
 install:
-  - choco install winflexbison3
+  - choco install winflexbison3 windows-sdk-10-version-2004-windbg
 
 build_script:
   # dump some system info
@@ -57,10 +55,12 @@ build_script:
   # Build minimal configuration
   - mkdir _build
   - cd _build
-  - set BUILD_TYPE=MinSizeRel
-  - set GENERATOR=-GNinja
+  - set BUILD_TYPE=Debug
+  - set GENERATOR=-G "Visual Studio 18 2026"
   - call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
-  - cmake -E time cmake %GENERATOR% .. -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DMYSQL_MAINTAINER_MODE=ERR -DFAST_BUILD=1 -DPLUGIN_PERFSCHEMA=NO -DPLUGIN_FEEDBACK=NO
+  # Get correct cmake, default one is outdated
+  - set PATH=C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%PATH%
+  - cmake -E time cmake %GENERATOR% .. -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DMYSQL_MAINTAINER_MODE=ERR -DFAST_BUILD=1 -DPLUGIN_PERFSCHEMA=NO -DPLUGIN_FEEDBACK=NO
   - set /A jobs=2*%NUMBER_OF_PROCESSORS%
   - cmake -E time cmake --build . -j %jobs% --config %BUILD_TYPE% --target minbuild
 
