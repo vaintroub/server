@@ -41,7 +41,7 @@ clone_script:
 skip_branch_with_pr: true
 
 install:
-  - choco install winflexbison3 windbg
+  - choco install winflexbison3 windows-sdk-10-version-2004-windbg
 
 build_script:
   # dump some system info
