@@ -41,7 +41,7 @@ clone_script:
 skip_branch_with_pr: true
 
 install:
-  - choco install winflexbison3
+  - choco install winflexbison3 windbg
 
 build_script:
   # dump some system info
