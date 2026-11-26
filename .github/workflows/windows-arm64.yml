@@ -16,15 +16,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: p16-default
+          - name: p16-rpl
             parallel: 16
             extra: ''
-          - name: p16-poolmax1g
-            parallel: 16
-            extra: '--mysqld=--innodb-buffer-pool-size-max=1G'
-          - name: p8-default
-            parallel: 8
+          - name: p32-rpl
+            parallel: 32
             extra: ''
+          - name: p48-rpl
+            parallel: 48
+            extra: ''
+          - name: p32-rpl-poolmax1g
+            parallel: 32
+            extra: '--mysqld=--loose-innodb-buffer-pool-size-max=1G'
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
@@ -137,18 +140,22 @@ jobs:
             foreach ($run in 1..2) {
               if (Test-Path "$cidir/var") { Remove-Item -Recurse -Force "$cidir/var" }
               $t0 = Get-Date
-              perl bld\mysql-test\mysql-test-run.pl --force --parallel=$parallel --suite=main,innodb,parts --vardir=$cidir/var --skip-rpl --mysqld=--lower-case-table-names=0 --mysqld=--loose-innodb-flush-log-at-trx-commit=2 --mysqld=--debug-no-sync --skip-test=innodb-virtual-columns $extra.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) 2>&1 | Tee-Object -FilePath "$cidir/mtr-$run.log"
+              perl bld\mysql-test\mysql-test-run.pl --force --parallel=$parallel --suite=main,innodb,parts,rpl --vardir=$cidir/var --mysqld=--lower-case-table-names=0 --mysqld=--loose-innodb-flush-log-at-trx-commit=2 --mysqld=--debug-no-sync $extra.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) 2>&1 | Tee-Object -FilePath "$cidir/mtr-$run.log"
               $r = $LASTEXITCODE
               $dur = [int]((Get-Date) - $t0).TotalMinutes
               $log = Get-Content "$cidir/mtr-$run.log"
               $failed = @($log | Select-String '\[ fail \]').Count
               $oom = @($log | Select-String 'Out of memory|Cannot allocate|not enough memory|EE_OUTOFMEMORY|my_malloc').Count
               $crash = @(Get-ChildItem "$cidir/var" -Recurse -Include *.err -ErrorAction SilentlyContinue |
-                Select-String 'got signal|Access violation|Assertion .* failed|Fatal error').Count
+                Select-String 'got exception|Assertion .* failed').Count
               $line = "${{ matrix.name }} run ${run}: exit=$r minutes=$dur failedTests=$failed oomMessages=$oom crashMessages=$crash"
               Write-Host "SUMMARY $line"
               $line >> $env:GITHUB_STEP_SUMMARY
               Copy-Item -Recurse -Force "$cidir/var/log" "$cidir/log-run$run" -ErrorAction SilentlyContinue
+              Get-ChildItem "$cidir/var" -Recurse -Include *.err -ErrorAction SilentlyContinue |
+                Select-String 'got exception|Out of memory|EE_OUTOFMEMORY|Cannot allocate' |
+                Select-Object -First 50 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line)" } |
+                Set-Content "$cidir/errors-run$run.txt"
               if ($r -ne 0) { $rc = $r }
             }
           } finally {
@@ -162,8 +169,8 @@ jobs:
           $cidir = $env:MTR_CIDIR
           if (Test-Path "$cidir/mem-samples.log") { "=== mem-samples.log (last 30)"; Get-Content "$cidir/mem-samples.log" -Tail 30 }
           "=== memory-related messages in server logs"
-          Get-ChildItem "$cidir/var","$cidir/log-run1","$cidir/log-run2" -Recurse -Include *.log,*.err -ErrorAction SilentlyContinue |
-            Select-String -Pattern 'Cannot map innodb_buffer_pool_size_max|Out of memory|EE_OUTOFMEMORY|Cannot allocate memory|not enough memory|got signal|Access violation' -ErrorAction SilentlyContinue |
+          Get-ChildItem "$cidir/var" -Recurse -Include *.err -ErrorAction SilentlyContinue |
+            Select-String -Pattern 'Cannot map innodb_buffer_pool_size_max|Out of memory|EE_OUTOFMEMORY|Cannot allocate memory|not enough memory|got exception' -ErrorAction SilentlyContinue |
             Select-Object -First 40 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line)" }
 
       - name: Upload logs
@@ -174,5 +181,6 @@ jobs:
           path: |
             ${{ env.MTR_CIDIR }}/mem-samples.log
             ${{ env.MTR_CIDIR }}/mtr-*.log
+            ${{ env.MTR_CIDIR }}/errors-run*.txt
             ${{ env.MTR_CIDIR }}/log-run*
           if-no-files-found: ignore
