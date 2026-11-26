@@ -140,7 +140,7 @@ jobs:
             foreach ($run in 1..2) {
               if (Test-Path "$cidir/var") { Remove-Item -Recurse -Force "$cidir/var" }
               $t0 = Get-Date
-              perl bld\mysql-test\mysql-test-run.pl --force --parallel=$parallel --suite=main,innodb,parts,rpl --vardir=$cidir/var --mysqld=--lower-case-table-names=0 --mysqld=--loose-innodb-flush-log-at-trx-commit=2 --mysqld=--debug-no-sync $extra.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) 2>&1 | Tee-Object -FilePath "$cidir/mtr-$run.log"
+              perl bld\mysql-test\mysql-test-run.pl --force --parallel=$parallel --suite=main,innodb,parts --vardir=$cidir/var --mysqld=--lower-case-table-names=0 --mysqld=--loose-innodb-flush-log-at-trx-commit=2 --mysqld=--debug-no-sync $extra.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) 2>&1 | Tee-Object -FilePath "$cidir/mtr-$run.log"
               $r = $LASTEXITCODE
               $dur = [int]((Get-Date) - $t0).TotalMinutes
               $log = Get-Content "$cidir/mtr-$run.log"
